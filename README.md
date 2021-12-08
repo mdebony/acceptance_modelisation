@@ -65,8 +65,8 @@ hdu_acceptance = acceptance_model.to_table_hdu()
 hdu_acceptance.writeto('acceptance.fits', overwrite=True)
 ```
 
-It's then possible to load the acceptance model in the current gammapy data_store with this code.
-You would need then to recreate you Observations object in order than gammapy take it into account.
+It's then possible to load the acceptance model in the current gammapy DataStore with this code.
+You would need then to recreate you gammapy Observations object in order than the acceptance model is taken into account for the analysis.
 
 ```python
 data_store.hdu_table.remove_rows(data_store.hdu_table['HDU_TYPE']=='bkg')
