@@ -28,7 +28,7 @@ from regions import CircleSkyRegion
 import astropy.units as u
 import numpy as np
 from astropy.coordinates import SkyCoord
-from acceptance_modelisation import create_radial_acceptance_map
+from acceptance_modelisation import RadialAcceptanceMapCreator
 
 # The observations to use for creating the acceptance model
 data_store = DataStore.from_dir("$GAMMAPY_DATA/hess-dl3-dr1")
@@ -44,11 +44,12 @@ size_fov = 2.5*u.deg
 offset_axis_acceptance = MapAxis.from_bounds(0.*u.deg, size_fov, nbin=6, name='offset')
 energy_axis_acceptance = MapAxis.from_energy_bounds(e_min, e_max, nbin=6, name='energy')
 
-acceptance_model = create_radial_acceptance_map(obs_collection,
-                                                energy_axis_acceptance, 
-                                                offset_axis_acceptance, 
-                                                exclude_regions=exclude_regions, 
-                                                oversample_map=100)
+
+acceptance_model_creator = RadialAcceptanceMapCreator(energyAxisAcceptance,
+                                                      offsetAxisAcceptance,
+                                                      exclude_regions=exclude_regions,
+                                                      oversample_map=100)
+acceptance_model = acceptance_model_creator.create_radial_acceptance_map(obsCollection)
 
 ```
 
@@ -83,4 +84,14 @@ data_store.hdu_table = data_store.hdu_table.copy()
 obs_collection = data_store.get_observations([23523, 23526, 23559, 23592])
 
 data_store.hdu_table
+```
+
+It's also possible to fit the normalisation of the model per run. For this use the method create_radial_acceptance_map_per_observation .
+In that case the output is a dictionary containing the acceptance model of each observations (with the observation Id as index).
+```python
+acceptance_model_creator = RadialAcceptanceMapCreator(energyAxisAcceptance,
+                                                      offsetAxisAcceptance,
+                                                      exclude_regions=exclude_regions,
+                                                      oversample_map=100)
+acceptance_models = acceptance_model_creator.create_radial_acceptance_map_per_observation(obsCollection)
 ```
