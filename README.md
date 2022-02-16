@@ -45,11 +45,11 @@ offset_axis_acceptance = MapAxis.from_bounds(0.*u.deg, size_fov, nbin=6, name='o
 energy_axis_acceptance = MapAxis.from_energy_bounds(e_min, e_max, nbin=6, name='energy')
 
 
-acceptance_model_creator = RadialAcceptanceMapCreator(energyAxisAcceptance,
-                                                      offsetAxisAcceptance,
+acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
+                                                      offset_axis_acceptance,
                                                       exclude_regions=exclude_regions,
                                                       oversample_map=100)
-acceptance_model = acceptance_model_creator.create_radial_acceptance_map(obsCollection)
+acceptance_model = acceptance_model_creator.create_radial_acceptance_map(obs_collection)
 
 ```
 
@@ -89,9 +89,9 @@ data_store.hdu_table
 It's also possible to fit the normalisation of the model per run. For this use the method create_radial_acceptance_map_per_observation .
 In that case the output is a dictionary containing the acceptance model of each observations (with the observation Id as index).
 ```python
-acceptance_model_creator = RadialAcceptanceMapCreator(energyAxisAcceptance,
-                                                      offsetAxisAcceptance,
+acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
+                                                      offset_axis_acceptance,
                                                       exclude_regions=exclude_regions,
                                                       oversample_map=100)
-acceptance_models = acceptance_model_creator.create_radial_acceptance_map_per_observation(obsCollection)
+acceptance_models = acceptance_model_creator.create_radial_acceptance_map_per_observation(obs_collection)
 ```
