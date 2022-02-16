@@ -22,7 +22,7 @@ class RadialAcceptanceMapCreator:
             offset_axis : gammapy.maps.geom.MapAxis
                 The offset axis for the acceptance model
             oversample_map : int
-                oversample in number of pixel of the spatial axis used for the calculation
+                Oversample in number of pixel of the spatial axis used for the calculation
             exclude_regions : list of 'regions.SkyRegion'
                 Region with sources, will be excluded of the calculation of the acceptance map
         """
