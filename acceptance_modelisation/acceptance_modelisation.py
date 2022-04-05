@@ -102,8 +102,8 @@ class RadialAcceptanceMapCreator:
             exp_map_obs.counts.data = obs.observation_live_time_duration.value
             exp_map_obs_total.counts.data = obs.observation_live_time_duration.value
 
-            count_map_obs.counts.data = count_map_obs.counts.data * exclusion_mask
-            exp_map_obs.counts.data = exp_map_obs.counts.data * exclusion_mask
+            count_map_obs.counts.data = count_map_obs.counts.data * exclusion_mask.data
+            exp_map_obs.counts.data = exp_map_obs.counts.data * exclusion_mask.data
 
             count_map_background.data += count_map_obs.counts.data
             exp_map_background.data += exp_map_obs.counts.data
@@ -116,9 +116,9 @@ class RadialAcceptanceMapCreator:
                                                       outer_radius=self.offset_axis.edges[i + 1])
             selection_map = geom.to_image().region_mask([selection_region])
 
-            value = u.dimensionless_unscaled * np.sum(count_map_background.data * selection_map, axis=(1,2))
-            value *= np.sum(exp_map_background_total.data * selection_map, axis=(1,2)) / np.sum(
-                exp_map_background.data * selection_map, axis=(1,2))
+            value = u.dimensionless_unscaled * np.sum(count_map_background.data * selection_map.data, axis=(1,2))
+            value *= np.sum(exp_map_background_total.data * selection_map.data, axis=(1,2)) / np.sum(
+                exp_map_background.data * selection_map.data, axis=(1,2))
 
             value /= (self.energy_axis.edges[1:] - self.energy_axis.edges[:-1])
             value /= 2. * np.pi * (
