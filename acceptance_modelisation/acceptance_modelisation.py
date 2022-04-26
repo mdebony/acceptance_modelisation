@@ -102,9 +102,8 @@ class RadialAcceptanceMapCreator:
             exp_map_obs.counts.data = obs.observation_live_time_duration.value
             exp_map_obs_total.counts.data = obs.observation_live_time_duration.value
 
-            for i in range(count_map_obs.counts.data.shape[0]):
-                count_map_obs.counts.data[i, :, :] = count_map_obs.counts.data[i, :, :] * exclusion_mask
-                exp_map_obs.counts.data[i, :, :] = exp_map_obs.counts.data[i, :, :] * exclusion_mask
+            count_map_obs.counts.data = count_map_obs.counts.data * exclusion_mask.data
+            exp_map_obs.counts.data = exp_map_obs.counts.data * exclusion_mask.data
 
             count_map_background.data += count_map_obs.counts.data
             exp_map_background.data += exp_map_obs.counts.data
@@ -116,17 +115,17 @@ class RadialAcceptanceMapCreator:
             selection_region = CircleAnnulusSkyRegion(center=center_map, inner_radius=self.offset_axis.edges[i],
                                                       outer_radius=self.offset_axis.edges[i + 1])
             selection_map = geom.to_image().region_mask([selection_region])
-            for j in range(self.energy_axis.nbin):
-                value = u.dimensionless_unscaled * np.sum(count_map_background.data[j, :, :] * selection_map)
-                value *= np.sum(exp_map_background_total.data[j, :, :] * selection_map) / np.sum(
-                    exp_map_background.data[j, :, :] * selection_map)
 
-                value /= (self.energy_axis.edges[j + 1] - self.energy_axis.edges[j])
-                value /= 2. * np.pi * (
-                            self.offset_axis.edges[i + 1].to('radian') - self.offset_axis.edges[i].to('radian')) * \
-                         self.offset_axis.center[i].to('radian')
-                value /= livetime
-                data_background[j, i] = value
+            value = u.dimensionless_unscaled * np.sum(count_map_background.data * selection_map.data, axis=(1,2))
+            value *= np.sum(exp_map_background_total.data * selection_map.data, axis=(1,2)) / np.sum(
+                exp_map_background.data * selection_map.data, axis=(1,2))
+
+            value /= (self.energy_axis.edges[1:] - self.energy_axis.edges[:-1])
+            value /= 2. * np.pi * (
+                        self.offset_axis.edges[i + 1].to('radian') - self.offset_axis.edges[i].to('radian')) * \
+                     self.offset_axis.center[i].to('radian')
+            value /= livetime
+            data_background[:, i] = value
 
         background = Background2D(axes=[self.energy_axis, self.offset_axis], data=data_background)
 
