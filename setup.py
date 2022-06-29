@@ -17,7 +17,7 @@ setup(
         'gammapy>=0.19,<0.20',
         'numpy',
         'astropy>=4.0',
-        'regions'
+        'regions>=0.5,<0.6'
     ],
     author='Mathieu de Bony de Lavergne',
     author_email='lavergne@lapp.in2p3.fr'
