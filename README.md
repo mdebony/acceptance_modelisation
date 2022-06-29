@@ -14,7 +14,7 @@ python setup.py install
 Dependencies :
 - numpy
 - gammapy 0.19
-- regions
+- regions 0.5
 - astropy
 
 # Example of use
