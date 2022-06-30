@@ -166,7 +166,7 @@ class RadialAcceptanceMapCreator:
 
         binned_model = [self.create_radial_acceptance_map(binned_obs) for binned_obs in binned_observations]
         bin_center = []
-        for i in range(binned_observations):
+        for i in range(len(binned_observations)):
             bin_center.append(np.mean([np.cos(obs.pointing_zen) for obs in binned_observations[i]]))
 
         radial_acceptance_map = {}
