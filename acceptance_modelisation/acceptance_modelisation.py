@@ -173,7 +173,7 @@ class RadialAcceptanceMapCreator:
         if len(binned_model) <= 1:
             logging.warning('Only one zenith bin, zenith interpolation deactivated')
             for obs in observations:
-                radial_acceptance_map[obs.id_observation] = binned_model[0]
+                radial_acceptance_map[obs.obs_id] = binned_model[0]
         else:
             data_cube = np.zeros(tuple([len(binned_model), ] + list(binned_model[0].data.shape))) * binned_model[0].unit
             for i in range(len(binned_model)):
@@ -183,7 +183,7 @@ class RadialAcceptanceMapCreator:
                                    axis=0,
                                    fill_value='extrapolate')
             for obs in observations:
-                radial_acceptance_map[obs.id_observation] = Background2D(axes=binned_model[0].axes,
+                radial_acceptance_map[obs.obs_id] = Background2D(axes=binned_model[0].axes,
                                                                          data=interp_func(np.cos(obs.pointing_zen))*data_cube.unit)
 
         return radial_acceptance_map
@@ -211,7 +211,7 @@ class RadialAcceptanceMapCreator:
         else:
             unique_base_radial_acceptance_map = self.create_radial_acceptance_map(observations)
             for obs in observations:
-                base_radial_acceptance_map[obs.id_observation] = unique_base_radial_acceptance_map
+                base_radial_acceptance_map[obs.obs_id] = unique_base_radial_acceptance_map
 
         radial_acceptance_map = {}
         # Fit norm of the model to the observations
