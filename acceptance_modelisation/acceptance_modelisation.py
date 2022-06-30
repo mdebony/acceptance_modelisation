@@ -179,7 +179,7 @@ class RadialAcceptanceMapCreator:
             for i in range(len(binned_model)):
                 data_cube[i] = binned_model[i].data * binned_model[i].unit
             interp_func = interp1d(x=np.array(bin_center),
-                                   y=np.log10(data_cube.value),
+                                   y=np.log10(data_cube.value+1.e-16),
                                    axis=0,
                                    fill_value='extrapolate')
             for obs in observations:
