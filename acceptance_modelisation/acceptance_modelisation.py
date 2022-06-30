@@ -232,7 +232,7 @@ class RadialAcceptanceMapCreator:
             norm_background = parameters[parameters['name'] == 'norm']['value'][0]
 
             # Apply normalisation to the background model
-            radial_acceptance_map[id_observation] = copy.deepcopy(base_radial_acceptance_map)
+            radial_acceptance_map[id_observation] = copy.deepcopy(base_radial_acceptance_map[id_observation])
             radial_acceptance_map[id_observation].data = radial_acceptance_map[id_observation].data * norm_background
 
         return radial_acceptance_map
