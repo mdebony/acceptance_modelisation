@@ -184,7 +184,7 @@ class RadialAcceptanceMapCreator:
                                    fill_value='extrapolate')
             for obs in observations:
                 radial_acceptance_map[obs.obs_id] = Background2D(axes=binned_model[0].axes,
-                                                                         data=interp_func(np.cos(obs.pointing_zen))*data_cube.unit)
+                                                                         data=(10.**interp_func(np.cos(obs.pointing_zen)))*data_cube.unit)
 
         return radial_acceptance_map
 
