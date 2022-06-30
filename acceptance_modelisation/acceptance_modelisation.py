@@ -1,7 +1,10 @@
 import copy
 import numpy as np
 import astropy.units as u
+import logging
+from scipy.interpolate import interp1d
 from astropy.coordinates import SkyCoord
+from gammapy.data import Observations
 from gammapy.datasets import MapDataset
 from gammapy.irf import Background2D
 from gammapy.makers import MapDatasetMaker, SafeMaskMaker, FoVBackgroundMaker
@@ -11,7 +14,8 @@ from regions import CircleAnnulusSkyRegion
 
 class RadialAcceptanceMapCreator:
 
-    def __init__(self, energy_axis, offset_axis, oversample_map=10, exclude_regions=[]):
+    def __init__(self, energy_axis, offset_axis, oversample_map=10, exclude_regions=[],
+                 min_run_per_cos_zenith_bin=3, initial_cos_zenith_binning=0.01):
         """
             Create the class for calculating radial acceptance model
 
@@ -32,6 +36,8 @@ class RadialAcceptanceMapCreator:
         self.offset_axis = offset_axis
         self.oversample_map = oversample_map
         self.exclude_regions = exclude_regions
+        self.min_run_per_cos_zenith_bin = min_run_per_cos_zenith_bin
+        self.initial_cos_zenith_binning = initial_cos_zenith_binning
 
         # Calculate map parameter
         self.n_bins_map = self.offset_axis.nbin * self.oversample_map * 2
@@ -122,8 +128,8 @@ class RadialAcceptanceMapCreator:
                     exp_map_background.data[j, :, :] * selection_map)
 
                 value /= (self.energy_axis.edges[j + 1] - self.energy_axis.edges[j])
-                value /= 2. * np.pi * (
-                            self.offset_axis.edges[i + 1].to('radian') - self.offset_axis.edges[i].to('radian')) * \
+                value /= 2. * np.pi * \
+                         (self.offset_axis.edges[i + 1].to('radian') - self.offset_axis.edges[i].to('radian')) * \
                          self.offset_axis.center[i].to('radian')
                 value /= livetime
                 data_background[j, i] = value
@@ -132,7 +138,57 @@ class RadialAcceptanceMapCreator:
 
         return background
 
-    def create_radial_acceptance_map_per_observation(self, observations):
+    def create_radial_acceptance_map_cos_zenith_binned(self, observations):
+
+        cos_zenith_bin = np.sort(np.arange(1.0, 0. - self.initial_cos_zenith_binning, -self.initial_cos_zenith_binning))
+        cos_zenith_observations = [np.cos(obs.pointing_zen) for obs in observations]
+        run_per_bin = np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0]
+
+        i = 0
+        while i < len(run_per_bin):
+            if run_per_bin[i] < self.min_run_per_cos_zenith_bin and (i + 1) < len(run_per_bin):
+                run_per_bin[i] += run_per_bin[i + 1]
+                run_per_bin = np.delete(run_per_bin, i + 1)
+                cos_zenith_bin = np.delete(cos_zenith_bin, i + 1)
+            elif run_per_bin[i] < self.min_run_per_cos_zenith_bin and (i + 1) == len(run_per_bin):
+                run_per_bin[i - 1] += run_per_bin[i]
+                run_per_bin = np.delete(run_per_bin, i)
+                cos_zenith_bin = np.delete(cos_zenith_bin, i)
+                i -= 1
+            else:
+                i += 1
+
+        binned_observations = []
+        for i in range((len(cos_zenith_bin) - 1)):
+            binned_observations.append(Observations())
+        for obs in observations:
+            binned_observations[np.digitize(np.cos(obs.pointing_zen), cos_zenith_bin)-1].append(obs)
+
+        binned_model = [self.create_radial_acceptance_map(binned_obs) for binned_obs in binned_observations]
+        bin_center = []
+        for i in range(binned_observations):
+            bin_center.append(np.mean([np.cos(obs.pointing_zen) for obs in binned_observations[i]]))
+
+        radial_acceptance_map = {}
+        if len(binned_model) <= 1:
+            logging.warning('Only one zenith bin, zenith interpolation deactivated')
+            for obs in observations:
+                radial_acceptance_map[obs.id_observation] = binned_model[0]
+        else:
+            data_cube = np.zeros(tuple([len(binned_model), ] + list(binned_model[0].data.shape))) * binned_model[0].unit
+            for i in range(len(binned_model)):
+                data_cube[i] = binned_model[i].data * binned_model[i].unit
+            interp_func = interp1d(x=np.array(bin_center),
+                                   y=np.log10(data_cube.value),
+                                   axis=0,
+                                   fill_value='extrapolate')
+            for obs in observations:
+                radial_acceptance_map[obs.id_observation] = Background2D(axes=binned_model[0].axes,
+                                                                         data=interp_func(np.cos(obs.pointing_zen))*data_cube.unit)
+
+        return radial_acceptance_map
+
+    def create_radial_acceptance_map_per_observation(self, observations, zenith_bin=True):
         """
             Calculate a radial acceptance map with the norm adjusted for each run
 
@@ -140,6 +196,8 @@ class RadialAcceptanceMapCreator:
             ----------
             observations : gammapy.data.observations.Observations
                 The collection of observations used to make the acceptance map
+            zenith_bin : bool,
+                If true the acceptance maps will be generated using zenith binning and interpolation
 
             Returns
             -------
@@ -147,7 +205,13 @@ class RadialAcceptanceMapCreator:
                 A dict with observation number as keu and a bakground model that could be used as an acceptance model associated at each key
         """
 
-        base_radial_acceptance_map = self.create_radial_acceptance_map(observations)
+        base_radial_acceptance_map = {}
+        if zenith_bin:
+            base_radial_acceptance_map = self.create_radial_acceptance_map_cos_zenith_binned(observations)
+        else:
+            unique_base_radial_acceptance_map = self.create_radial_acceptance_map(observations)
+            for obs in observations:
+                base_radial_acceptance_map[obs.id_observation] = unique_base_radial_acceptance_map
 
         radial_acceptance_map = {}
         # Fit norm of the model to the observations
@@ -156,7 +220,7 @@ class RadialAcceptanceMapCreator:
 
             # replace the background model
             modified_observation = copy.deepcopy(obs)
-            modified_observation.bkg = base_radial_acceptance_map
+            modified_observation.bkg = base_radial_acceptance_map[id_observation]
 
             # Fit the background model
             map_obs, exclusion_mask = self.__create_sky_map(modified_observation, add_bkg=True)
