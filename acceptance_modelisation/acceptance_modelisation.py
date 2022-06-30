@@ -150,7 +150,7 @@ class RadialAcceptanceMapCreator:
                 run_per_bin[i] += run_per_bin[i + 1]
                 run_per_bin = np.delete(run_per_bin, i + 1)
                 cos_zenith_bin = np.delete(cos_zenith_bin, i + 1)
-            elif run_per_bin[i] < self.min_run_per_cos_zenith_bin and (i + 1) == len(run_per_bin):
+            elif run_per_bin[i] < self.min_run_per_cos_zenith_bin and (i + 1) == len(run_per_bin) and i > 0:
                 run_per_bin[i - 1] += run_per_bin[i]
                 run_per_bin = np.delete(run_per_bin, i)
                 cos_zenith_bin = np.delete(cos_zenith_bin, i)
