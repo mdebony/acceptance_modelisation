@@ -223,6 +223,7 @@ class RadialAcceptanceMapCreator:
             modified_observation.bkg = base_radial_acceptance_map[id_observation]
 
             # Fit the background model
+            logging.info('Fit to model to run ' + str(id_observation))
             map_obs, exclusion_mask = self.__create_sky_map(modified_observation, add_bkg=True)
             maker_FoV_background = FoVBackgroundMaker(method='fit', exclusion_mask=exclusion_mask)
             map_obs = maker_FoV_background.run(map_obs)
