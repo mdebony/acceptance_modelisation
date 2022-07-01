@@ -29,6 +29,10 @@ class RadialAcceptanceMapCreator:
                 oversample in number of pixel of the spatial axis used for the calculation
             exclude_regions : list of 'regions.SkyRegion'
                 Region with sources, will be excluded of the calculation of the acceptance map
+            min_run_per_cos_zenith_bin : int
+                Minimum number of runs per zenith bins
+            initial_cos_zenith_binning : float
+                Initial bin size for cos zenith binning
         """
 
         # Store base parameter
@@ -139,6 +143,20 @@ class RadialAcceptanceMapCreator:
         return background
 
     def create_radial_acceptance_map_cos_zenith_binned(self, observations):
+        """
+            Calculate a radial acceptance map using cos zenith binning and interpolation
+
+            Parameters
+            ----------
+            observations : gammapy.data.observations.Observations
+                The collection of observations used to make the acceptance map
+
+            Returns
+            -------
+            background : dict of gammapy.irf.background.Background2D
+                A dict with observation number as keu and a bakground model that could be used as an acceptance model associated at each key
+
+        """
 
         cos_zenith_bin = np.sort(np.arange(1.0, 0. - self.initial_cos_zenith_binning, -self.initial_cos_zenith_binning))
         cos_zenith_observations = [np.cos(obs.pointing_zen) for obs in observations]
