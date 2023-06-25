@@ -6,16 +6,17 @@ import astropy.units as u
 import numpy as np
 from astropy.coordinates import SkyCoord, AltAz, SkyOffsetFrame
 from astropy.time import Time
-from regions import CircleSkyRegion
 from gammapy.data import Observations, Observation
 from gammapy.datasets import MapDataset
 from gammapy.irf import Background2D, Background3D
 from gammapy.makers import MapDatasetMaker, SafeMaskMaker, FoVBackgroundMaker
 from gammapy.maps import WcsNDMap, WcsGeom, Map
+from regions import CircleSkyRegion
 from scipy.integrate import cumulative_trapezoid
 from scipy.interpolate import interp1d
 
 from .toolbox import compute_rotation_speed_fov
+
 
 class BaseAcceptanceMapCreator(ABC):
 
@@ -53,19 +54,20 @@ class BaseAcceptanceMapCreator(ABC):
         self.initial_cos_zenith_binning = initial_cos_zenith_binning
 
         # Calculate map parameter
-        self.n_bins_map = 2*int(np.rint((self.max_offset / spatial_resolution).to(u.dimensionless_unscaled)))
+        self.n_bins_map = 2 * int(np.rint((self.max_offset / spatial_resolution).to(u.dimensionless_unscaled)))
         self.spatial_bin_size = self.max_offset / (self.n_bins_map / 2)
         self.center_map = SkyCoord(ra=0. * u.deg, dec=0. * u.deg, frame='icrs')
         self.geom = WcsGeom.create(skydir=self.center_map, npix=(self.n_bins_map, self.n_bins_map),
                                    binsz=self.spatial_bin_size, frame="icrs", axes=[self.energy_axis])
         logging.info(
-            'Computation will be made with a bin size of {:.3f} arcmin'.format(self.spatial_bin_size.to_value(u.arcmin)))
+            'Computation will be made with a bin size of {:.3f} arcmin'.format(
+                self.spatial_bin_size.to_value(u.arcmin)))
 
         # Store rotation computation parameters
         self.max_fraction_pixel_rotation_fov = max_fraction_pixel_rotation_fov
         self.time_resolution_rotation_fov = time_resolution_rotation_fov
 
-    def __transform_obs_to_camera_frame(self, obs):
+    def _transform_obs_to_camera_frame(self, obs):
         """
             Transform events, pointing and exclusion regions of an obs from a sky frame to camera frame
 
@@ -114,11 +116,11 @@ class BaseAcceptanceMapCreator(ABC):
         average_alt_az_frame = AltAz(obstime=obs_camera_frame.tmid,
                                      location=obs_camera_frame.observatory_earth_location)
         average_alt_az_pointing = obs.get_pointing_icrs(obs.tmid).transform_to(average_alt_az_frame)
-        exclusion_region_camera_frame = self.__transform_exclusion_region_to_camera_frame(average_alt_az_pointing)
+        exclusion_region_camera_frame = self._transform_exclusion_region_to_camera_frame(average_alt_az_pointing)
 
         return obs_camera_frame, exclusion_region_camera_frame
 
-    def __transform_exclusion_region_to_camera_frame(self, pointing_altaz):
+    def _transform_exclusion_region_to_camera_frame(self, pointing_altaz):
         """
             Transform the list of exclusion region in sky frame into a list in camera frame
 
@@ -150,7 +152,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         return exclude_region_camera_frame
 
-    def __create_map(self, obs, geom, exclude_regions, add_bkg=False):
+    def _create_map(self, obs, geom, exclude_regions, add_bkg=False):
         """
             Create a map and the associated exclusion mask based on the given geometry and exclusion region
 
@@ -188,7 +190,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         return map_obs, exclusion_mask
 
-    def __create_sky_map(self, obs, add_bkg=False):
+    def _create_sky_map(self, obs, add_bkg=False):
         """
             Create the sky map used
 
@@ -207,11 +209,11 @@ class BaseAcceptanceMapCreator(ABC):
 
         geom_obs = WcsGeom.create(skydir=obs.get_pointing_icrs(obs.tmid), npix=(self.n_bins_map, self.n_bins_map),
                                   binsz=self.spatial_bin_size, frame="icrs", axes=[self.energy_axis])
-        map_obs, exclusion_mask = self.__create_map(obs, geom_obs, self.exclude_regions, add_bkg=add_bkg)
+        map_obs, exclusion_mask = self._create_map(obs, geom_obs, self.exclude_regions, add_bkg=add_bkg)
 
         return map_obs, exclusion_mask
 
-    def __create_camera_map(self, obs):
+    def _create_camera_map(self, obs):
         """
             Create the sky map in camera coordinate used for computation
 
@@ -226,13 +228,13 @@ class BaseAcceptanceMapCreator(ABC):
             exclusion_mask : gammapy.maps.WcsNDMap
         """
 
-        obs_camera_frame, exclusion_region_camera_frame = self.__transform_obs_to_camera_frame(obs)
-        map_obs, exclusion_mask = self.__create_map(obs_camera_frame, self.geom,
-                                                    exclusion_region_camera_frame, add_bkg=False)
+        obs_camera_frame, exclusion_region_camera_frame = self._transform_obs_to_camera_frame(obs)
+        map_obs, exclusion_mask = self._create_map(obs_camera_frame, self.geom,
+                                                   exclusion_region_camera_frame, add_bkg=False)
 
         return map_obs, exclusion_mask
 
-    def __compute_time_interval_cut_obs_rotation_fov(self, obs):
+    def _compute_time_interval_cut_obs_rotation_fov(self, obs):
         """
             Create a list of time to bin the observation to take into accounts the rotation of the FoV
 
@@ -248,40 +250,61 @@ class BaseAcceptanceMapCreator(ABC):
         """
 
         # Determine time interval for cutting the obs as function of the rotation of the Fov
-        n_bin = max(2, int(np.rint(((obs.tstop-obs.tstart)/self.time_resolution_rotation_fov).to_value(u.dimensionless_unscaled))))
+        n_bin = max(2, int(np.rint(
+            ((obs.tstop - obs.tstart) / self.time_resolution_rotation_fov).to_value(u.dimensionless_unscaled))))
         time_axis = np.linspace(obs.tstart, obs.tstop, num=n_bin)
-        rotation_speed_fov = compute_rotation_speed_fov(time_axis, obs.get_pointing_icrs(obs.tmid), obs.observatory_earth_location)
+        rotation_speed_fov = compute_rotation_speed_fov(time_axis, obs.get_pointing_icrs(obs.tmid),
+                                                        obs.observatory_earth_location)
         rotation_fov = cumulative_trapezoid(x=time_axis.unix_tai,
                                             y=rotation_speed_fov.to_value(u.rad / u.s),
                                             initial=0.) * u.rad
-        distance_rotation_fov = rotation_fov.to_value(u.rad)*np.pi*self.max_offset
-        node_obs = distance_rotation_fov//(self.spatial_bin_size*self.max_fraction_pixel_rotation_fov)
+        distance_rotation_fov = rotation_fov.to_value(u.rad) * np.pi * self.max_offset
+        node_obs = distance_rotation_fov // (self.spatial_bin_size * self.max_fraction_pixel_rotation_fov)
         change_node = node_obs[2:] != node_obs[1:-1]
         time_interval = Time([obs.tstart, ] + [time_axis[1:-1][change_node], ] + [obs.tstop, ])
 
         return time_interval
 
-    def create_base_computation_map(self, observations):
+    def _create_base_computation_map(self, observations):
+        """
+            From a list observations return a stacked finely binned counts and exposure map in camera frame to compute a model
+
+            Parameters
+            ----------
+            observations : gammapy.data.observations.Observations
+                The list of observations
+
+            Returns
+            -------
+            count_map_background : gammapy.map.WcsNDMap
+                The count map
+            exp_map_background : gammapy.map.WcsNDMap
+                The exposure map corrected for exclusion regions
+            exp_map_background_total : gammapy.map.WcsNDMap
+                The exposure map without correction for exclusion regions
+            livetime : astropy.unit.Unit
+                The total exposure time for the model
+        """
         count_map_background = WcsNDMap(geom=self.geom)
         exp_map_background = WcsNDMap(geom=self.geom, unit=u.s)
         exp_map_background_total = WcsNDMap(geom=self.geom, unit=u.s)
         livetime = 0. * u.s
 
         for obs in observations:
-            time_interval = self.__compute_time_interval_cut_obs_rotation_fov(obs)
-            for i in range(len(time_interval)-1):
+            time_interval = self._compute_time_interval_cut_obs_rotation_fov(obs)
+            for i in range(len(time_interval) - 1):
                 cut_obs = obs.select_time(Time([time_interval[i], time_interval[i + 1]]))
-                count_map_obs, exclusion_mask = self.__create_camera_map(cut_obs)
+                count_map_obs, exclusion_mask = self._create_camera_map(cut_obs)
 
                 exp_map_obs = MapDataset.create(geom=count_map_obs.geoms['geom'])
                 exp_map_obs_total = MapDataset.create(geom=count_map_obs.geoms['geom'])
                 exp_map_obs.counts.data = cut_obs.observation_live_time_duration.value
                 exp_map_obs_total.counts.data = cut_obs.observation_live_time_duration.value
-    
+
                 for j in range(count_map_obs.counts.data.shape[0]):
                     count_map_obs.counts.data[j, :, :] = count_map_obs.counts.data[j, :, :] * exclusion_mask
                     exp_map_obs.counts.data[j, :, :] = exp_map_obs.counts.data[j, :, :] * exclusion_mask
-    
+
                 count_map_background.data += count_map_obs.counts.data
                 exp_map_background.data += exp_map_obs.counts.data
                 exp_map_background_total.data += exp_map_obs_total.counts.data
@@ -419,7 +442,7 @@ class BaseAcceptanceMapCreator(ABC):
 
             # Fit the background model
             logging.info('Fit to model to run ' + str(id_observation))
-            map_obs, exclusion_mask = self.__create_sky_map(modified_observation, add_bkg=True)
+            map_obs, exclusion_mask = self._create_sky_map(modified_observation, add_bkg=True)
             maker_FoV_background = FoVBackgroundMaker(method='fit', exclusion_mask=exclusion_mask)
             map_obs = maker_FoV_background.run(map_obs)
 
