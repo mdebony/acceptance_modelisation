@@ -19,7 +19,7 @@ from .toolbox import compute_rotation_speed_fov
 
 class BaseAcceptanceMapCreator(ABC):
 
-    def __init__(self, energy_axis, offset_axis, spatial_oversample=10, exclude_regions=[],
+    def __init__(self, energy_axis, max_offset, spatial_resolution, exclude_regions=[],
                  min_run_per_cos_zenith_bin=3, initial_cos_zenith_binning=0.01,
                  max_fraction_pixel_rotation_fov=0.5, time_resolution_rotation_fov=0.1 * u.s):
         """
@@ -29,10 +29,10 @@ class BaseAcceptanceMapCreator(ABC):
             ----------
             energy_axis : gammapy.maps.geom.MapAxis
                 The energy axis for the acceptance model
-            offset_axis : gammapy.maps.geom.MapAxis
-                The offset axis for the acceptance model
-            spatial_oversample : int
-                Oversample in number of pixel of the spatial axis used for the calculation
+            max_offset : astropy.unit.Unit
+                The offset corresponding to the edge of the model
+            spatial_resolution : astropy.unit.Unit
+                The spatial resolution
             exclude_regions : list of 'regions.SkyRegion'
                 Region with known or putative gamma-ray emission, will be excluded of the calculation of the acceptance map
             min_run_per_cos_zenith_bin : int
@@ -47,17 +47,14 @@ class BaseAcceptanceMapCreator(ABC):
 
         # Store base parameter
         self.energy_axis = energy_axis
-        self.offset_axis = offset_axis
-        self.spatial_oversample = spatial_oversample
+        self.max_offset = max_offset
         self.exclude_regions = exclude_regions
         self.min_run_per_cos_zenith_bin = min_run_per_cos_zenith_bin
         self.initial_cos_zenith_binning = initial_cos_zenith_binning
 
         # Calculate map parameter
-        self.spatial_bin_size = np.min(
-            (self.offset_axis.edges[1:] - self.offset_axis.edges[:-1]) / self.spatial_oversample)
-        self.n_bins_map = int(np.rint((self.offset_axis.edges[-1] / self.spatial_bin_size)))
-        self.spatial_bin_size = self.offset_axis.edges[-1] / (self.n_bins_map / 2)
+        self.n_bins_map = 2*int(np.rint((self.max_offset / spatial_resolution).to(u.dimensionless_unscaled)))
+        self.spatial_bin_size = self.max_offset / (self.n_bins_map / 2)
         self.center_map = SkyCoord(ra=0. * u.deg, dec=0. * u.deg, frame='icrs')
         self.geom = WcsGeom.create(skydir=self.center_map, npix=(self.n_bins_map, self.n_bins_map),
                                    binsz=self.spatial_bin_size, frame="icrs", axes=[self.energy_axis])
@@ -178,7 +175,7 @@ class BaseAcceptanceMapCreator(ABC):
         if add_bkg:
             maker = MapDatasetMaker(selection=["counts", "background"])
 
-        maker_safe_mask = SafeMaskMaker(methods=["offset-max"], offset_max=np.max(self.offset_axis.edges))
+        maker_safe_mask = SafeMaskMaker(methods=["offset-max"], offset_max=self.max_offset)
 
         geom_image = geom.to_image()
         if len(exclude_regions) == 0:
@@ -257,7 +254,7 @@ class BaseAcceptanceMapCreator(ABC):
         rotation_fov = cumulative_trapezoid(x=time_axis.unix_tai,
                                             y=rotation_speed_fov.to_value(u.rad / u.s),
                                             initial=0.) * u.rad
-        distance_rotation_fov = rotation_fov.to_value(u.rad)*np.pi*np.max(self.offset_axis.edges)
+        distance_rotation_fov = rotation_fov.to_value(u.rad)*np.pi*self.max_offset
         node_obs = distance_rotation_fov//(self.spatial_bin_size*self.max_fraction_pixel_rotation_fov)
         change_node = node_obs[2:] != node_obs[1:-1]
         time_interval = Time([obs.tstart, ] + [time_axis[1:-1][change_node], ] + [obs.tstop, ])
