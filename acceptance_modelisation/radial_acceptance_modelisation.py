@@ -63,7 +63,7 @@ class RadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
 
         data_background = np.zeros((self.energy_axis.nbin, self.offset_axis.nbin)) * u.Unit('s-1 MeV-1 sr-1')
         for i in range(self.offset_axis.nbin):
-            if np.isclose(0. * u.deg, min(self.offset_axis.edges[i])):
+            if np.isclose(0. * u.deg, self.offset_axis.edges[i]):
                 selection_region = CircleSkyRegion(center=self.center_map, radius=self.offset_axis.edges[i + 1])
             else:
                 selection_region = CircleAnnulusSkyRegion(center=self.center_map,
