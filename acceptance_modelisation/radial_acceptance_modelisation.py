@@ -76,9 +76,7 @@ class RadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
                     exp_map_background.data[j, :, :] * selection_map)
 
                 value /= (self.energy_axis.edges[j + 1] - self.energy_axis.edges[j])
-                value /= 2. * np.pi * (
-                            self.offset_axis.edges[i + 1].to('radian') - self.offset_axis.edges[i].to('radian')) * \
-                         self.offset_axis.center[i].to('radian')
+                value /= 2. * np.pi * (np.cos(self.offset_axis.edges[i]) - np.cos(self.offset_axis.edges[i+1])) * u.steradian
                 value /= livetime
                 data_background[j, i] = value
 
