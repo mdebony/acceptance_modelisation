@@ -10,7 +10,7 @@ from .base_acceptance_map_creator import BaseAcceptanceMapCreator
 class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
 
     def __init__(self, energy_axis, offset_axis, oversample_map=10, exclude_regions=[],
-                 min_run_per_cos_zenith_bin=15, initial_cos_zenith_binning=0.01,
+                 min_observation_per_cos_zenith_bin=15, initial_cos_zenith_binning=0.01,
                  max_fraction_pixel_rotation_fov=0.5, time_resolution_rotation_fov=0.1 * u.s):
         """
             Create the class for calculating radial acceptance model
@@ -25,7 +25,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                 Oversample in number of pixel of the spatial axis used for the calculation
             exclude_regions : list of 'regions.SkyRegion'
                 Region with known or putative gamma-ray emission, will be excluded of the calculation of the acceptance map
-            min_run_per_cos_zenith_bin : int
+            min_observation_per_cos_zenith_bin : int
                 Minimum number of runs per zenith bins
             initial_cos_zenith_binning : float
                 Initial bin size for cos zenith binning
@@ -47,7 +47,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         max_offset = np.max(self.offset_axis.edges)
 
         # Initiate upper instance
-        super().__init__(energy_axis, max_offset, spatial_resolution, exclude_regions, min_run_per_cos_zenith_bin,
+        super().__init__(energy_axis, max_offset, spatial_resolution, exclude_regions, min_observation_per_cos_zenith_bin,
                          initial_cos_zenith_binning, max_fraction_pixel_rotation_fov, time_resolution_rotation_fov)
 
     def create_acceptance_map(self, observations):

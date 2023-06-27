@@ -21,7 +21,7 @@ from .toolbox import compute_rotation_speed_fov
 class BaseAcceptanceMapCreator(ABC):
 
     def __init__(self, energy_axis, max_offset, spatial_resolution, exclude_regions=[],
-                 min_run_per_cos_zenith_bin=3, initial_cos_zenith_binning=0.01,
+                 min_observation_per_cos_zenith_bin=3, initial_cos_zenith_binning=0.01,
                  max_fraction_pixel_rotation_fov=0.5, time_resolution_rotation_fov=0.1 * u.s):
         """
             Create the class for calculating radial acceptance model
@@ -36,7 +36,7 @@ class BaseAcceptanceMapCreator(ABC):
                 The spatial resolution
             exclude_regions : list of 'regions.SkyRegion'
                 Region with known or putative gamma-ray emission, will be excluded of the calculation of the acceptance map
-            min_run_per_cos_zenith_bin : int
+            min_observation_per_cos_zenith_bin : int
                 Minimum number of runs per zenith bins
             initial_cos_zenith_binning : float
                 Initial bin size for cos zenith binning
@@ -50,7 +50,7 @@ class BaseAcceptanceMapCreator(ABC):
         self.energy_axis = energy_axis
         self.max_offset = max_offset
         self.exclude_regions = exclude_regions
-        self.min_run_per_cos_zenith_bin = min_run_per_cos_zenith_bin
+        self.min_observation_per_cos_zenith_bin = min_observation_per_cos_zenith_bin
         self.initial_cos_zenith_binning = initial_cos_zenith_binning
 
         # Calculate map parameter
@@ -350,11 +350,11 @@ class BaseAcceptanceMapCreator(ABC):
 
         i = 0
         while i < len(run_per_bin):
-            if run_per_bin[i] < self.min_run_per_cos_zenith_bin and (i + 1) < len(run_per_bin):
+            if run_per_bin[i] < self.min_observation_per_cos_zenith_bin and (i + 1) < len(run_per_bin):
                 run_per_bin[i] += run_per_bin[i + 1]
                 run_per_bin = np.delete(run_per_bin, i + 1)
                 cos_zenith_bin = np.delete(cos_zenith_bin, i + 1)
-            elif run_per_bin[i] < self.min_run_per_cos_zenith_bin and (i + 1) == len(run_per_bin) and i > 0:
+            elif run_per_bin[i] < self.min_observation_per_cos_zenith_bin and (i + 1) == len(run_per_bin) and i > 0:
                 run_per_bin[i - 1] += run_per_bin[i]
                 run_per_bin = np.delete(run_per_bin, i)
                 cos_zenith_bin = np.delete(cos_zenith_bin, i)
