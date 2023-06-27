@@ -10,7 +10,7 @@ from .base_acceptance_map_creator import BaseAcceptanceMapCreator
 class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
 
     def __init__(self, energy_axis, offset_axis, oversample_map=10, exclude_regions=[],
-                 min_run_per_cos_zenith_bin=3, initial_cos_zenith_binning=0.01,
+                 min_run_per_cos_zenith_bin=15, initial_cos_zenith_binning=0.01,
                  max_fraction_pixel_rotation_fov=0.5, time_resolution_rotation_fov=0.1 * u.s):
         """
             Create the class for calculating radial acceptance model
