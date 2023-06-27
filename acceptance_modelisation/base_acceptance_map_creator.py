@@ -1,6 +1,7 @@
 import copy
 import logging
 from abc import ABC, abstractmethod
+from typing import Tuple, List, Any, Optional
 
 import astropy.units as u
 import numpy as np
@@ -9,9 +10,10 @@ from astropy.time import Time
 from gammapy.data import Observations, Observation
 from gammapy.datasets import MapDataset
 from gammapy.irf import Background2D, Background3D
+from gammapy.irf.background import BackgroundIRF
 from gammapy.makers import MapDatasetMaker, SafeMaskMaker, FoVBackgroundMaker
-from gammapy.maps import WcsNDMap, WcsGeom, Map
-from regions import CircleSkyRegion
+from gammapy.maps import WcsNDMap, WcsGeom, Map, MapAxis
+from regions import CircleSkyRegion, SkyRegion
 from scipy.integrate import cumulative_trapezoid
 from scipy.interpolate import interp1d
 
@@ -20,31 +22,41 @@ from .toolbox import compute_rotation_speed_fov
 
 class BaseAcceptanceMapCreator(ABC):
 
-    def __init__(self, energy_axis, max_offset, spatial_resolution, exclude_regions=[],
-                 min_observation_per_cos_zenith_bin=3, initial_cos_zenith_binning=0.01,
-                 max_fraction_pixel_rotation_fov=0.5, time_resolution_rotation_fov=0.1 * u.s):
+    def __init__(self,
+                 energy_axis: MapAxis,
+                 max_offset: u.Quantity,
+                 spatial_resolution: u.Quantity,
+                 exclude_regions: Optional[List[SkyRegion]] = None,
+                 min_observation_per_cos_zenith_bin: int = 3,
+                 initial_cos_zenith_binning: float = 0.01,
+                 max_fraction_pixel_rotation_fov: float = 0.5,
+                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s) -> None:
         """
-            Create the class for calculating radial acceptance model
+        Create the class for calculating radial acceptance model.
 
-            Parameters
-            ----------
-            energy_axis : gammapy.maps.geom.MapAxis
-                The energy axis for the acceptance model
-            max_offset : astropy.unit.Unit
-                The offset corresponding to the edge of the model
-            spatial_resolution : astropy.unit.Unit
-                The spatial resolution
-            exclude_regions : list of 'regions.SkyRegion'
-                Region with known or putative gamma-ray emission, will be excluded of the calculation of the acceptance map
-            min_observation_per_cos_zenith_bin : int
-                Minimum number of runs per zenith bins
-            initial_cos_zenith_binning : float
-                Initial bin size for cos zenith binning
-            max_fraction_pixel_rotation_fov : float
-                For camera frame transformation the maximum size relative to a pixel a rotation is allowed
-            time_resolution_rotation_fov : astropy.unit.Units
-                Time resolution to use for the computation of the rotation of the FoV
+        Parameters
+        ----------
+        energy_axis : gammapy.maps.geom.MapAxis
+            The energy axis for the acceptance model
+        max_offset : astropy.units.Quantity
+            The offset corresponding to the edge of the model
+        spatial_resolution : astropy.units.Quantity
+            The spatial resolution
+        exclude_regions : list of regions.SkyRegion, optional
+            Regions with known or putative gamma-ray emission, will be excluded from the calculation of the acceptance map
+        min_observation_per_cos_zenith_bin : int, optional
+            Minimum number of observations per zenith bins
+        initial_cos_zenith_binning : float, optional
+            Initial bin size for cos zenith binning
+        max_fraction_pixel_rotation_fov : float, optional
+            For camera frame transformation the maximum size relative to a pixel a rotation is allowed
+        time_resolution_rotation_fov : astropy.units.Quantity, optional
+            Time resolution to use for the computation of the rotation of the FoV
         """
+
+        # If no exclusion region, default it as an empty list
+        if exclude_regions is None:
+            exclude_regions = []
 
         # Store base parameter
         self.energy_axis = energy_axis
@@ -67,21 +79,21 @@ class BaseAcceptanceMapCreator(ABC):
         self.max_fraction_pixel_rotation_fov = max_fraction_pixel_rotation_fov
         self.time_resolution_rotation_fov = time_resolution_rotation_fov
 
-    def _transform_obs_to_camera_frame(self, obs):
+    def _transform_obs_to_camera_frame(self, obs: Observation) -> Tuple[Observation, List[SkyRegion]]:
         """
-            Transform events, pointing and exclusion regions of an obs from a sky frame to camera frame
+        Transform events, pointing and exclusion regions of an obs from a sky frame to camera frame
 
-            Parameters
-            ----------
-            obs : gammapy.data.observations.Observation
-                The observation to transform
+        Parameters
+        ----------
+        obs : gammapy.data.observations.Observation
+            The observation to transform
 
-            Returns
-            -------
-            obs_camera_frame : gammapy.data.observations.Observation
-                The observation transformed for reference in camera frame
-            exclusion_region_camera_frame : list of region.SkyRegion
-                The list of exclusion region in camera frame
+        Returns
+        -------
+        obs_camera_frame : gammapy.data.observations.Observation
+            The observation transformed for reference in camera frame
+        exclusion_region_camera_frame : list of region.SkyRegion
+            The list of exclusion region in camera frame
         """
 
         # Transform to altaz frame
@@ -120,57 +132,69 @@ class BaseAcceptanceMapCreator(ABC):
 
         return obs_camera_frame, exclusion_region_camera_frame
 
-    def _transform_exclusion_region_to_camera_frame(self, pointing_altaz):
+    def _transform_exclusion_region_to_camera_frame(self, pointing_altaz: AltAz) -> List[SkyRegion]:
         """
-            Transform the list of exclusion region in sky frame into a list in camera frame
+        Transform the list of exclusion regions in sky frame into a list in camera frame.
 
-            Parameters
-            ----------
-            pointing_altaz : astropy.coordinates.AltAz
-                The pointing position of the telescope
+        Parameters
+        ----------
+        pointing_altaz : astropy.coordinates.AltAz
+            The pointing position of the telescope.
 
-            Returns
-            -------
-            exclusion_region_camera_frame : list of region.SkyRegion
-                The list of exclusion region in camera frame
+        Returns
+        -------
+        exclusion_region_camera_frame : list of regions.SkyRegion
+            The list of exclusion regions in camera frame.
+
+        Raises
+        ------
+        Exception
+            If the region type is not supported.
         """
 
         camera_frame = SkyOffsetFrame(origin=pointing_altaz,
                                       rotation=[0., ] * u.deg)
         exclude_region_camera_frame = []
-        for r in self.exclude_regions:
-            if type(r) is CircleSkyRegion:
-                center_coordinate = r.center
+        for region in self.exclude_regions:
+            if isinstance(region, CircleSkyRegion):
+                center_coordinate = region.center
                 center_coordinate_altaz = center_coordinate.transform_to(pointing_altaz)
                 center_coordinate_camera_frame = center_coordinate_altaz.transform_to(camera_frame)
                 center_coordinate_camera_frame_arb = SkyCoord(ra=center_coordinate_camera_frame.lon[0],
                                                               dec=center_coordinate_camera_frame.lat[0])
                 exclude_region_camera_frame.append(CircleSkyRegion(center=center_coordinate_camera_frame_arb,
-                                                                   radius=r.radius))
+                                                                   radius=region.radius))
             else:
-                return Exception(str(type(r)) + ' region type not supported')
+                raise Exception(f'{type(region)} region type not supported')
 
         return exclude_region_camera_frame
 
-    def _create_map(self, obs, geom, exclude_regions, add_bkg=False):
+    def _create_map(self,
+                    obs: Observation,
+                    geom: WcsGeom,
+                    exclude_regions: List[SkyRegion],
+                    add_bkg: bool = False
+                    ) -> Tuple[MapDataset, WcsNDMap]:
         """
-            Create a map and the associated exclusion mask based on the given geometry and exclusion region
+        Create a map and the associated exclusion mask based on the given geometry and exclusion region.
 
-            Parameters
-            ----------
-            obs : gammapy.data.observations.Observation
-                The observation used to make the sky map
-            geom : gammapy.maps.WcsGeom
-                The geometry for the maps
-            exclude_regions : list of region.SkyRegion
-                The list of exclusion region
-            add_bkg : bool
-                If true will also add the background model to the map
+        Parameters
+        ----------
+        obs : gammapy.data.observations.Observation
+            The observation used to make the sky map.
+        geom : gammapy.maps.WcsGeom
+            The geometry for the maps.
+        exclude_regions : list of regions.SkyRegion
+            The list of exclusion regions.
+        add_bkg : bool, optional
+            If true, will also add the background model to the map. Default is False.
 
-            Returns
-            -------
-            map_obs : gammapy.datasets.MapDataset
-            exclusion_mask : gammapy.maps.WcsNDMap
+        Returns
+        -------
+        map_dataset : gammapy.datasets.MapDataset
+            The map dataset.
+        exclusion_mask : gammapy.maps.WcsNDMap
+            The exclusion mask.
         """
 
         maker = MapDatasetMaker(selection=["counts"])
@@ -180,52 +204,62 @@ class BaseAcceptanceMapCreator(ABC):
         maker_safe_mask = SafeMaskMaker(methods=["offset-max"], offset_max=self.max_offset)
 
         geom_image = geom.to_image()
-        if len(exclude_regions) == 0:
-            exclusion_mask = ~Map.from_geom(geom_image)
-        else:
-            exclusion_mask = ~geom_image.region_mask(exclude_regions)
+        exclusion_mask = ~geom_image.region_mask(exclude_regions) if len(exclude_regions) > 0 else ~Map.from_geom(
+            geom_image)
 
         map_obs = maker.run(MapDataset.create(geom=geom), obs)
         map_obs = maker_safe_mask.run(map_obs, obs)
 
         return map_obs, exclusion_mask
 
-    def _create_sky_map(self, obs, add_bkg=False):
+    def _create_sky_map(self,
+                        obs: Observation,
+                        add_bkg: bool = False
+                        ) -> Tuple[MapDataset, WcsNDMap]:
         """
-            Create the sky map used
+        Create the sky map and the associated exclusion mask based on the observation and the exclusion regions.
 
-            Parameters
-            ----------
-            obs : gammapy.data.observations.Observation
-                The observation used to make the sky map
-            add_bkg : bool
-                If true will also add the background model to the map
+        Parameters
+        ----------
+        obs : gammapy.data.observations.Observation
+            The observation used to make the sky map.
+        add_bkg : bool, optional
+            If true, will also add the background model to the map. Default is False.
 
-            Returns
-            -------
-            map_obs : gammapy.datasets.MapDataset
-            exclusion_mask : gammapy.maps.WcsNDMap
+        Returns
+        -------
+        map_dataset : gammapy.datasets.MapDataset
+            The map dataset.
+        exclusion_mask : gammapy.maps.WcsNDMap
+            The exclusion mask.
         """
 
-        geom_obs = WcsGeom.create(skydir=obs.get_pointing_icrs(obs.tmid), npix=(self.n_bins_map, self.n_bins_map),
-                                  binsz=self.spatial_bin_size, frame="icrs", axes=[self.energy_axis])
+        geom_obs = WcsGeom.create(skydir=obs.get_pointing_icrs(obs.tmid),
+                                  npix=(self.n_bins_map, self.n_bins_map),
+                                  binsz=self.spatial_bin_size,
+                                  frame="icrs",
+                                  axes=[self.energy_axis])
         map_obs, exclusion_mask = self._create_map(obs, geom_obs, self.exclude_regions, add_bkg=add_bkg)
 
         return map_obs, exclusion_mask
 
-    def _create_camera_map(self, obs):
+    def _create_camera_map(self,
+                           obs: Observation
+                           ) -> Tuple[MapDataset, WcsNDMap]:
         """
-            Create the sky map in camera coordinate used for computation
+        Create the sky map in camera coordinates used for computation.
 
-            Parameters
-            ----------
-            obs : gammapy.data.observations.Observation
-                The observation used to make the sky map
+        Parameters
+        ----------
+        obs : gammapy.data.observations.Observation
+            The observation used to make the sky map.
 
-            Returns
-            -------
-            map_obs : gammapy.datasets.MapDataset
-            exclusion_mask : gammapy.maps.WcsNDMap
+        Returns
+        -------
+        map_dataset : gammapy.datasets.MapDataset
+            The map dataset in camera coordinates.
+        exclusion_mask : gammapy.maps.WcsNDMap
+            The exclusion mask in camera coordinates.
         """
 
         obs_camera_frame, exclusion_region_camera_frame = self._transform_obs_to_camera_frame(obs)
@@ -234,19 +268,19 @@ class BaseAcceptanceMapCreator(ABC):
 
         return map_obs, exclusion_mask
 
-    def _compute_time_interval_cut_obs_rotation_fov(self, obs):
+    def _compute_time_intervals_based_on_fov_rotation(self, obs: Observation) -> Time:
         """
-            Create a list of time to bin the observation to take into accounts the rotation of the FoV
+        Calculate time intervals based on the rotation of the Field of View (FoV).
 
-            Parameters
-            ----------
-            obs : gammapy.data.observations.Observation
-                The observation used to make the sky map
+        Parameters
+        ----------
+        obs : gammapy.data.observations.Observation
+            The observation used to calculate time intervals.
 
-            Returns
-            -------
-            time_interval : list of astropy.time.Time
-                The time intervals to use for cutting the obs in time bins for compute
+        Returns
+        -------
+        time_intervals : astropy.time.Time
+            The time intervals for cutting the observation into time bins.
         """
 
         # Determine time interval for cutting the obs as function of the rotation of the Fov
@@ -265,25 +299,25 @@ class BaseAcceptanceMapCreator(ABC):
 
         return time_interval
 
-    def _create_base_computation_map(self, observations):
+    def _create_base_computation_map(self, observations: Observation) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Unit]:
         """
-            From a list observations return a stacked finely binned counts and exposure map in camera frame to compute a model
+        From a list of observations return a stacked finely binned counts and exposure map in camera frame to compute a model
 
-            Parameters
-            ----------
-            observations : gammapy.data.observations.Observations
-                The list of observations
+        Parameters
+        ----------
+        observations : gammapy.data.observations.Observations
+            The list of observations
 
-            Returns
-            -------
-            count_map_background : gammapy.map.WcsNDMap
-                The count map
-            exp_map_background : gammapy.map.WcsNDMap
-                The exposure map corrected for exclusion regions
-            exp_map_background_total : gammapy.map.WcsNDMap
-                The exposure map without correction for exclusion regions
-            livetime : astropy.unit.Unit
-                The total exposure time for the model
+        Returns
+        -------
+        count_map_background : gammapy.map.WcsNDMap
+            The count map
+        exp_map_background : gammapy.map.WcsNDMap
+            The exposure map corrected for exclusion regions
+        exp_map_background_total : gammapy.map.WcsNDMap
+            The exposure map without correction for exclusion regions
+        livetime : astropy.unit.Unit
+            The total exposure time for the model
         """
         count_map_background = WcsNDMap(geom=self.geom)
         exp_map_background = WcsNDMap(geom=self.geom, unit=u.s)
@@ -291,7 +325,7 @@ class BaseAcceptanceMapCreator(ABC):
         livetime = 0. * u.s
 
         for obs in observations:
-            time_interval = self._compute_time_interval_cut_obs_rotation_fov(obs)
+            time_interval = self._compute_time_intervals_based_on_fov_rotation(obs)
             for i in range(len(time_interval) - 1):
                 cut_obs = obs.select_time(Time([time_interval[i], time_interval[i + 1]]))
                 count_map_obs, exclusion_mask = self._create_camera_map(cut_obs)
@@ -313,34 +347,39 @@ class BaseAcceptanceMapCreator(ABC):
         return count_map_background, exp_map_background, exp_map_background_total, livetime
 
     @abstractmethod
-    def create_acceptance_map(self, observations):
+    def create_acceptance_map(self, observations: Observation) -> BackgroundIRF:
         """
-            Abtract method to calculate an acceptance map from a list of observations
+        Abstract method to calculate an acceptance map from a list of observations.
 
-            Parameters
-            ----------
-            observations : gammapy.data.observations.Observations
-                The collection of observations used to make the acceptance map
+        Subclasses must implement this method to provide the specific algorithm for calculating the acceptance map.
 
-            Returns
-            -------
-            background : gammapy.irf.background.Background2D or gammapy.irf.background.Background3D
-                The acceptance map resulting from the method
+        Parameters
+        ----------
+        observations : gammapy.data.observations.Observations
+            The collection of observations used to create the acceptance map.
+
+        Returns
+        -------
+        acceptance_map : gammapy.irf.background.Background2D or gammapy.irf.background.Background3D
+            The acceptance map calculated using the specific algorithm implemented by the subclass.
         """
+        pass
 
-    def create_acceptance_map_cos_zenith_binned(self, observations):
+    def create_acceptance_map_cos_zenith_binned(self,
+                                                observations: Observation
+                                                ) -> dict[Any, BackgroundIRF]:
         """
-            Calculate an acceptance map using cos zenith binning and interpolation
+        Calculate an acceptance map using cos zenith binning and interpolation
 
-            Parameters
-            ----------
-            observations : gammapy.data.observations.Observations
-                The collection of observations used to make the acceptance map
+        Parameters
+        ----------
+        observations : gammapy.data.observations.Observations
+            The collection of observations used to make the acceptance map
 
-            Returns
-            -------
-            background : dict of gammapy.irf.background.Background2D
-                A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
+        Returns
+        -------
+        background : dict of gammapy.irf.background.Background2D or gammapy.irf.background.Background3D
+            A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
 
         """
 
@@ -406,21 +445,24 @@ class BaseAcceptanceMapCreator(ABC):
 
         return acceptance_map
 
-    def create_acceptance_map_per_observation(self, observations, zenith_bin=True):
+    def create_acceptance_map_per_observation(self,
+                                              observations: Observation,
+                                              zenith_bin: bool = True
+                                              ) -> dict[Any, BackgroundIRF]:
         """
-            Calculate an acceptance map with the norm adjusted for each run
+        Calculate an acceptance map with the norm adjusted for each run
 
-            Parameters
-            ----------
-            observations : gammapy.data.observations.Observations
-                The collection of observations used to make the acceptance map
-            zenith_bin : bool,
-                If true the acceptance maps will be generated using zenith binning and interpolation
+        Parameters
+        ----------
+        observations : gammapy.data.observations.Observations
+            The collection of observations used to make the acceptance map
+        zenith_bin : bool, optional
+            If true the acceptance maps will be generated using zenith binning and interpolation
 
-            Returns
-            -------
-            background : dict of gammapy.irf.background.Background2D
-                A dict with observation number as keu and a background model that could be used as an acceptance model associated at each key
+        Returns
+        -------
+        background : dict of gammapy.irf.background.Background2D or gammapy.irf.background.Background3D
+            A dict with observation number as keu and a background model that could be used as an acceptance model associated at each key
         """
 
         base_acceptance_map = {}

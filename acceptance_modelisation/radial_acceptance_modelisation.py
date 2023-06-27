@@ -1,38 +1,52 @@
+from typing import List, Optional
+
 import astropy.units as u
 import numpy as np
+from gammapy.data import Observations
 from gammapy.irf import Background2D
-from regions import CircleAnnulusSkyRegion, CircleSkyRegion
+from gammapy.maps import MapAxis
+from regions import CircleAnnulusSkyRegion, CircleSkyRegion, SkyRegion
 
 from .base_acceptance_map_creator import BaseAcceptanceMapCreator
 
 
 class RadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
 
-    def __init__(self, energy_axis, offset_axis, oversample_map=10, exclude_regions=[],
-                 min_observation_per_cos_zenith_bin=3, initial_cos_zenith_binning=0.01,
-                 max_fraction_pixel_rotation_fov=0.5, time_resolution_rotation_fov=0.1 * u.s):
+    def __init__(self,
+                 energy_axis: MapAxis,
+                 offset_axis: MapAxis,
+                 oversample_map: int = 10,
+                 exclude_regions: Optional[List[SkyRegion]] = None,
+                 min_observation_per_cos_zenith_bin: int = 3,
+                 initial_cos_zenith_binning: float = 0.01,
+                 max_fraction_pixel_rotation_fov: float = 0.5,
+                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s) -> None:
         """
-            Create the class for calculating radial acceptance model
+        Create the class for calculating radial acceptance model
 
-            Parameters
-            ----------
-            energy_axis : gammapy.maps.geom.MapAxis
-                The energy axis for the acceptance model
-            offset_axis : gammapy.maps.geom.MapAxis
-                The offset axis for the acceptance model
-            oversample_map : int
-                Oversample in number of pixel of the spatial axis used for the calculation
-            exclude_regions : list of 'regions.SkyRegion'
-                Region with known or putative gamma-ray emission, will be excluded of the calculation of the acceptance map
-            min_observation_per_cos_zenith_bin : int
-                Minimum number of runs per zenith bins
-            initial_cos_zenith_binning : float
-                Initial bin size for cos zenith binning
-            max_fraction_pixel_rotation_fov : float
-                For camera frame transformation the maximum size relative to a pixel a rotation is allowed
-            time_resolution_rotation_fov : astropy.unit.Units
-                Time resolution to use for the computation of the rotation of the FoV
+        Parameters
+        ----------
+        energy_axis : MapAxis
+            The energy axis for the acceptance model
+        offset_axis : MapAxis
+            The offset axis for the acceptance model
+        oversample_map : int, optional
+            Oversample in number of pixel of the spatial axis used for the calculation
+        exclude_regions : list of regions.SkyRegion, optional
+            Region with known or putative gamma-ray emission, will be excluded of the calculation of the acceptance map
+        min_observation_per_cos_zenith_bin : int, optional
+            Minimum number of runs per zenith bins
+        initial_cos_zenith_binning : float, optional
+            Initial bin size for cos zenith binning
+        max_fraction_pixel_rotation_fov : float, optional
+            For camera frame transformation the maximum size relative to a pixel a rotation is allowed
+        time_resolution_rotation_fov : astropy.unit.Quantity, optional
+            Time resolution to use for the computation of the rotation of the FoV
         """
+
+        # If no exclusion region, default it as an empty list
+        if exclude_regions is None:
+            exclude_regions = []
 
         # Compute parameters for internal map
         self.offset_axis = offset_axis
@@ -45,18 +59,18 @@ class RadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
         super().__init__(energy_axis, max_offset, spatial_resolution, exclude_regions, min_observation_per_cos_zenith_bin,
                          initial_cos_zenith_binning, max_fraction_pixel_rotation_fov, time_resolution_rotation_fov)
 
-    def create_acceptance_map(self, observations):
+    def create_acceptance_map(self, observations: Observations) -> Background2D:
         """
-            Calculate a radial acceptance map
+        Calculate a radial acceptance map
 
-            Parameters
-            ----------
-            observations : gammapy.data.observations.Observations
-                The collection of observations used to make the acceptance map
+        Parameters
+        ----------
+        observations : Observations
+            The collection of observations used to make the acceptance map
 
-            Returns
-            -------
-            background : gammapy.irf.background.Background2D
+        Returns
+        -------
+        acceptance_map : Background2D
         """
         count_map_background, exp_map_background, exp_map_background_total, livetime = self._create_base_computation_map(
             observations)
@@ -80,6 +94,6 @@ class RadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
                 value /= livetime
                 data_background[j, i] = value
 
-        background = Background2D(axes=[self.energy_axis, self.offset_axis], data=data_background)
+        acceptance_map = Background2D(axes=[self.energy_axis, self.offset_axis], data=data_background)
 
-        return background
+        return acceptance_map
