@@ -89,6 +89,24 @@ obs_collection = data_store.get_observations([23523, 23526, 23559, 23592])
 data_store.hdu_table
 ```
 
+## Telescope position
+
+**The observations should contain the telescope position in order to have the algorithm working.**
+If the information is missing in the DL3, you could either add it or it possible to add it directly to the observation as shown in the example below.
+```python
+from astropy.coordinates import EarthLocation
+
+# Your telescope position in an EarthLocation object
+loc = EarthLocation.of_site('Roque de los Muchachos')
+
+# Add telescope position to observations
+for i in obs_collection:
+    obs_collection[i].obs_info['GEOLON'] = loc.lon.value
+    obs_collection[i].obs_info['GEOLAT'] = loc.lat.value
+    obs_collection[i].obs_info['GEOALT'] = loc.height.value
+    obs_collection[i]._location = loc
+```
+
 ## Runwise norm of the model 
 
 It's also possible to fit the normalisation of the model per run. For this use the method create_acceptance_map_per_observation .
