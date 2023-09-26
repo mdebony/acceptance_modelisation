@@ -10,7 +10,7 @@ from regions import CircleAnnulusSkyRegion, CircleSkyRegion, SkyRegion
 from .base_acceptance_map_creator import BaseAcceptanceMapCreator
 
 
-class RadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
+class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
 
     def __init__(self,
                  energy_axis: MapAxis,

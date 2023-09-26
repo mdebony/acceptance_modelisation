@@ -38,20 +38,19 @@ data_store = DataStore.from_dir("$GAMMAPY_DATA/hess-dl3-dr1")
 obs_collection = data_store.get_observations([23523, 23526, 23559, 23592])
 
 # The exclusion regions to apply during acceptance model calculation
-exclude_regions=[CircleSkyRegion(center=SkyCoord.from_name('Crab'),
-                                 radius=0.2*u.deg),]
+exclude_regions = [CircleSkyRegion(center=SkyCoord.from_name('Crab'),
+                                   radius=0.2 * u.deg), ]
 
 # Define the binning of the model
-e_min, e_max = 0.1*u.TeV, 10.*u.TeV
-size_fov = 2.5*u.deg
-offset_axis_acceptance = MapAxis.from_bounds(0.*u.deg, size_fov, nbin=6, name='offset')
+e_min, e_max = 0.1 * u.TeV, 10. * u.TeV
+size_fov = 2.5 * u.deg
+offset_axis_acceptance = MapAxis.from_bounds(0. * u.deg, size_fov, nbin=6, name='offset')
 energy_axis_acceptance = MapAxis.from_energy_bounds(e_min, e_max, nbin=6, name='energy')
 
-
 acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
-                                                      offset_axis_acceptance,
-                                                      exclude_regions=exclude_regions,
-                                                      oversample_map=10)
+                                                          offset_axis_acceptance,
+                                                          exclude_regions=exclude_regions,
+                                                          oversample_map=10)
 acceptance_model = acceptance_model_creator.create_acceptance_map(obs_collection)
 
 ```
