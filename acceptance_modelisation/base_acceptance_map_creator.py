@@ -410,11 +410,11 @@ class BaseAcceptanceMapCreator(ABC):
         binned_model = [self.create_acceptance_map(binned_obs) for binned_obs in binned_observations]
         bin_center = []
         for i in range(len(binned_observations)):
-            weighted_cos_zenith_bin_per_obs = []
-            livetime_per_obs = []
+            weighted_cos_zenith_bin_per_obs = np.array([])*u.s
+            livetime_per_obs = np.array([])*u.s
             for obs in binned_observations[i]:
-                weighted_cos_zenith_bin_per_obs.append(obs.observation_live_time_duration * np.cos(obs.pointing_zen))
-                livetime_per_obs.append(obs.observation_live_time_duration)
+                np.append(weighted_cos_zenith_bin_per_obs, obs.observation_live_time_duration * np.cos(obs.pointing_zen))
+                np.append(livetime_per_obs, obs.observation_live_time_duration)
             bin_center.append(
                 (np.sum(weighted_cos_zenith_bin_per_obs) / np.sum(livetime_per_obs)).to(u.dimensionless_unscaled))
 
