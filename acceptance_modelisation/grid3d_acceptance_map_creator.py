@@ -1,7 +1,6 @@
 from typing import List, Optional
 
 import astropy.units as u
-import matplotlib.pyplot as plt
 import numpy as np
 from gammapy.data import Observations
 from gammapy.irf import Background3D

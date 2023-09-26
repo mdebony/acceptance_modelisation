@@ -1,13 +1,10 @@
 from typing import List, Optional, Tuple
 
 import astropy.units as u
-import numpy as np
-from astropy.time import Time
-from gammapy.data import Observations, Observation
+from gammapy.data import Observation
 from gammapy.datasets import MapDataset
-from gammapy.irf import Background2D
 from gammapy.maps import MapAxis, WcsNDMap, WcsGeom
-from regions import CircleAnnulusSkyRegion, CircleSkyRegion, SkyRegion
+from regions import SkyRegion
 
 from .base_radial_acceptance_map_creator import BaseRadialAcceptanceMapCreator
 
