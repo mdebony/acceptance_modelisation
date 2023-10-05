@@ -347,7 +347,7 @@ class BaseAcceptanceMapCreator(ABC):
         return count_map_background, exp_map_background, exp_map_background_total, livetime
 
     @abstractmethod
-    def create_acceptance_map(self, observations: Observation) -> BackgroundIRF:
+    def create_acceptance_map(self, observations: Observations) -> BackgroundIRF:
         """
         Abstract method to calculate an acceptance map from a list of observations.
 
@@ -365,8 +365,57 @@ class BaseAcceptanceMapCreator(ABC):
         """
         pass
 
+    def _normalised_model_per_run(self,
+                                  observations: Observations,
+                                  acceptance_map: dict[Any, BackgroundIRF]) -> dict[Any, BackgroundIRF]:
+        """
+        Normalised the acceptance model associated to each run to the events associated with the run
+
+        Parameters
+        ----------
+        observations : gammapy.data.observations.Observations
+            The collection of observations used to make the acceptance map
+        acceptance_map :dict of gammapy.irf.background.Background2D or gammapy.irf.background.Background3D
+            A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
+            This is the models that will be normalised
+        Returns
+        -------
+        background : dict of gammapy.irf.background.Background2D or gammapy.irf.background.Background3D
+            A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
+        """
+
+        normalised_acceptance_map = {}
+        # Fit norm of the model to the observations
+        for obs in observations:
+            id_observation = obs.obs_id
+
+            # replace the background model
+            modified_observation = copy.deepcopy(obs)
+            modified_observation.bkg = acceptance_map[id_observation]
+
+            # Fit the background model
+            logging.info('Fit to model to run ' + str(id_observation))
+            map_obs, exclusion_mask = self._create_sky_map(modified_observation, add_bkg=True)
+            maker_FoV_background = FoVBackgroundMaker(method='fit', exclusion_mask=exclusion_mask)
+            map_obs = maker_FoV_background.run(map_obs)
+
+            # Extract the normalisation
+            parameters = map_obs.models.to_parameters_table()
+            norm_background = parameters[parameters['name'] == 'norm']['value'][0]
+
+            if norm_background < 0.:
+                logging.error('Invalid normalisation value for run ' + str(id_observation) + ' : ' + str(norm_background))
+            elif norm_background > 1.5 or norm_background < 0.5:
+                logging.error('High correction of the background normalisation normalisation for run ' + str(id_observation) + ' : ' + str(norm_background))
+
+            # Apply normalisation to the background model
+            normalised_acceptance_map[id_observation] = copy.deepcopy(acceptance_map[id_observation])
+            normalised_acceptance_map[id_observation].data = normalised_acceptance_map[id_observation].data * norm_background
+
+        return normalised_acceptance_map
+
     def create_acceptance_map_cos_zenith_binned(self,
-                                                observations: Observation
+                                                observations: Observations
                                                 ) -> dict[Any, BackgroundIRF]:
         """
         Calculate an acceptance map using cos zenith binning and interpolation
@@ -446,8 +495,9 @@ class BaseAcceptanceMapCreator(ABC):
         return acceptance_map
 
     def create_acceptance_map_per_observation(self,
-                                              observations: Observation,
-                                              zenith_bin: bool = True
+                                              observations: Observations,
+                                              zenith_bin: bool = True,
+                                              runwise_normalisation: bool = True,
                                               ) -> dict[Any, BackgroundIRF]:
         """
         Calculate an acceptance map with the norm adjusted for each run
@@ -458,42 +508,24 @@ class BaseAcceptanceMapCreator(ABC):
             The collection of observations used to make the acceptance map
         zenith_bin : bool, optional
             If true the acceptance maps will be generated using zenith binning and interpolation
+        runwise_normalisation : bool, optional
+            If true the acceptance maps will be normalised runwise to the observations
 
         Returns
         -------
         background : dict of gammapy.irf.background.Background2D or gammapy.irf.background.Background3D
-            A dict with observation number as keu and a background model that could be used as an acceptance model associated at each key
+            A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
         """
 
-        base_acceptance_map = {}
+        acceptance_map = {}
         if zenith_bin:
-            base_acceptance_map = self.create_acceptance_map_cos_zenith_binned(observations)
+            acceptance_map = self.create_acceptance_map_cos_zenith_binned(observations)
         else:
             unique_base_acceptance_map = self.create_acceptance_map(observations)
             for obs in observations:
-                base_acceptance_map[obs.obs_id] = unique_base_acceptance_map
+                acceptance_map[obs.obs_id] = unique_base_acceptance_map
 
-        acceptance_map = {}
-        # Fit norm of the model to the observations
-        for obs in observations:
-            id_observation = obs.obs_id
-
-            # replace the background model
-            modified_observation = copy.deepcopy(obs)
-            modified_observation.bkg = base_acceptance_map[id_observation]
-
-            # Fit the background model
-            logging.info('Fit to model to run ' + str(id_observation))
-            map_obs, exclusion_mask = self._create_sky_map(modified_observation, add_bkg=True)
-            maker_FoV_background = FoVBackgroundMaker(method='fit', exclusion_mask=exclusion_mask)
-            map_obs = maker_FoV_background.run(map_obs)
-
-            # Extract the normalisation
-            parameters = map_obs.models.to_parameters_table()
-            norm_background = parameters[parameters['name'] == 'norm']['value'][0]
-
-            # Apply normalisation to the background model
-            acceptance_map[id_observation] = copy.deepcopy(base_acceptance_map[id_observation])
-            acceptance_map[id_observation].data = acceptance_map[id_observation].data * norm_background
+        if runwise_normalisation:
+            acceptance_map = self._normalised_model_per_run(observations, acceptance_map)
 
         return acceptance_map
