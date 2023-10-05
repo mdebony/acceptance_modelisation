@@ -406,7 +406,7 @@ class BaseAcceptanceMapCreator(ABC):
             if norm_background < 0.:
                 logging.error('Invalid normalisation value for run ' + str(id_observation) + ' : ' + str(norm_background))
             elif norm_background > 1.5 or norm_background < 0.5:
-                logging.error('High correction of the background normalisation normalisation for run ' + str(id_observation) + ' : ' + str(norm_background))
+                logging.warning('High correction of the background normalisation normalisation for run ' + str(id_observation) + ' : ' + str(norm_background))
 
             # Apply normalisation to the background model
             normalised_acceptance_map[id_observation] = copy.deepcopy(acceptance_map[id_observation])
