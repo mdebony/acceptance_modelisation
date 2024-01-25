@@ -433,7 +433,7 @@ class BaseAcceptanceMapCreator(ABC):
         """
 
         cos_zenith_bin = np.sort(np.arange(1.0, 0. - self.initial_cos_zenith_binning, -self.initial_cos_zenith_binning))
-        cos_zenith_observations = [np.cos(obs.pointing_zen) for obs in observations]
+        cos_zenith_observations = [np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in observations]
         run_per_bin = np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0]
 
         i = 0
@@ -454,18 +454,18 @@ class BaseAcceptanceMapCreator(ABC):
         for i in range((len(cos_zenith_bin) - 1)):
             binned_observations.append(Observations())
         for obs in observations:
-            binned_observations[np.digitize(np.cos(obs.pointing_zen), cos_zenith_bin) - 1].append(obs)
+            binned_observations[np.digitize(np.cos(obs.get_pointing_altaz(obs.tmid).zen), cos_zenith_bin) - 1].append(obs)
 
         binned_model = [self.create_acceptance_map(binned_obs) for binned_obs in binned_observations]
         bin_center = []
         for i in range(len(binned_observations)):
-            weighted_cos_zenith_bin_per_obs = np.array([])*u.s
-            livetime_per_obs = np.array([])*u.s
+            weighted_cos_zenith_bin_per_obs = []
+            livetime_per_obs = []
             for obs in binned_observations[i]:
-                np.append(weighted_cos_zenith_bin_per_obs, obs.observation_live_time_duration * np.cos(obs.pointing_zen))
-                np.append(livetime_per_obs, obs.observation_live_time_duration)
+                weighted_cos_zenith_bin_per_obs.append(obs.observation_live_time_duration * np.cos(obs.get_pointing_altaz(obs.tmid).zen))
+                livetime_per_obs.append(obs.observation_live_time_duration)
             bin_center.append(
-                (np.sum(weighted_cos_zenith_bin_per_obs) / np.sum(livetime_per_obs)).to(u.dimensionless_unscaled))
+                np.sum([wcos.value for wcos in weighted_cos_zenith_bin_per_obs])/np.sum([livet.value for livet in livetime_per_obs]))
 
         acceptance_map = {}
         if len(binned_model) <= 1:
@@ -481,7 +481,7 @@ class BaseAcceptanceMapCreator(ABC):
                                    axis=0,
                                    fill_value='extrapolate')
             for obs in observations:
-                data_obs = (10. ** interp_func(np.cos(obs.pointing_zen)))
+                data_obs = (10. ** interp_func(np.cos(obs.get_pointing_altaz(obs.tmid).zen)))
                 data_obs[data_obs < 100 * np.finfo(np.float64).tiny] = 0.
                 if type(binned_model[0]) is Background2D:
                     acceptance_map[obs.obs_id] = Background2D(axes=binned_model[0].axes,
