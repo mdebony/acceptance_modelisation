@@ -6,6 +6,7 @@ from typing import Tuple, List, Any, Optional
 import astropy.units as u
 import numpy as np
 from astropy.coordinates import SkyCoord, AltAz, SkyOffsetFrame
+from astropy.coordinates.erfa_astrom import erfa_astrom, ErfaAstromInterpolator
 from astropy.time import Time
 from gammapy.data import Observations, Observation
 from gammapy.datasets import MapDataset
@@ -324,25 +325,26 @@ class BaseAcceptanceMapCreator(ABC):
         exp_map_background_total = WcsNDMap(geom=self.geom, unit=u.s)
         livetime = 0. * u.s
 
-        for obs in observations:
-            time_interval = self._compute_time_intervals_based_on_fov_rotation(obs)
-            for i in range(len(time_interval) - 1):
-                cut_obs = obs.select_time(Time([time_interval[i], time_interval[i + 1]]))
-                count_map_obs, exclusion_mask = self._create_camera_map(cut_obs)
+        with erfa_astrom.set(ErfaAstromInterpolator(1000 * u.s)):
+            for obs in observations:
+                time_interval = self._compute_time_intervals_based_on_fov_rotation(obs)
+                for i in range(len(time_interval) - 1):
+                    cut_obs = obs.select_time(Time([time_interval[i], time_interval[i + 1]]))
+                    count_map_obs, exclusion_mask = self._create_camera_map(cut_obs)
 
-                exp_map_obs = MapDataset.create(geom=count_map_obs.geoms['geom'])
-                exp_map_obs_total = MapDataset.create(geom=count_map_obs.geoms['geom'])
-                exp_map_obs.counts.data = cut_obs.observation_live_time_duration.value
-                exp_map_obs_total.counts.data = cut_obs.observation_live_time_duration.value
+                    exp_map_obs = MapDataset.create(geom=count_map_obs.geoms['geom'])
+                    exp_map_obs_total = MapDataset.create(geom=count_map_obs.geoms['geom'])
+                    exp_map_obs.counts.data = cut_obs.observation_live_time_duration.value
+                    exp_map_obs_total.counts.data = cut_obs.observation_live_time_duration.value
 
-                for j in range(count_map_obs.counts.data.shape[0]):
-                    count_map_obs.counts.data[j, :, :] = count_map_obs.counts.data[j, :, :] * exclusion_mask
-                    exp_map_obs.counts.data[j, :, :] = exp_map_obs.counts.data[j, :, :] * exclusion_mask
+                    for j in range(count_map_obs.counts.data.shape[0]):
+                        count_map_obs.counts.data[j, :, :] = count_map_obs.counts.data[j, :, :] * exclusion_mask
+                        exp_map_obs.counts.data[j, :, :] = exp_map_obs.counts.data[j, :, :] * exclusion_mask
 
-                count_map_background.data += count_map_obs.counts.data
-                exp_map_background.data += exp_map_obs.counts.data
-                exp_map_background_total.data += exp_map_obs_total.counts.data
-                livetime += cut_obs.observation_live_time_duration
+                    count_map_background.data += count_map_obs.counts.data
+                    exp_map_background.data += exp_map_obs.counts.data
+                    exp_map_background_total.data += exp_map_obs_total.counts.data
+                    livetime += cut_obs.observation_live_time_duration
 
         return count_map_background, exp_map_background, exp_map_background_total, livetime
 
