@@ -3,7 +3,7 @@ from typing import List, Optional
 import astropy.units as u
 import numpy as np
 from gammapy.data import Observations
-from gammapy.irf import Background3D
+from gammapy.irf import Background3D, FoVAlignment
 from gammapy.maps import MapAxis
 from regions import SkyRegion
 
@@ -103,6 +103,6 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                                                                              np.newaxis] / livetime
 
         acceptance_map = Background3D(axes=[self.energy_axis, extended_offset_axis_x, extended_offset_axis_y],
-                                      data=data_background.to(u.Unit('s-1 MeV-1 sr-1')))
+                                      data=data_background.to(u.Unit('s-1 MeV-1 sr-1')), fov_alignment=FoVAlignment.ALTAZ)
 
         return acceptance_map
