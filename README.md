@@ -118,11 +118,11 @@ acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
 acceptance_models = acceptance_model_creator.create_acceptance_map_per_observation(obs_collection)
 ```
 
-## Zenith interpolated model
+## Zenith bined model
 
-It's also possible to create model binned per cos zenith. Then the model for each run is determined through interpolation between the bins. For this use the method create_acceptance_map_per_observation but with the option `zenith_bin` set at True.
+It's also possible to create model binned per cos zenith. For this use the method create_acceptance_map_per_observation but with the option `zenith_binning` set at True.
 The width of zenith bin could be control at the creation of the object with the parameter `initial_cos_zenith_binning`. The algorithm will then automatically rebin to larger bin in order to have in each bin at least `min_run_per_cos_zenith_bin` observation per bin.
-In that case the output is a dictionary containing the acceptance model of each observations (with the observation Id as index).
+In that case the output is a dictionary containing the acceptance model of each observations (with the observation ID as index).
 ```python
 acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
                                                       offset_axis_acceptance,
@@ -131,7 +131,22 @@ acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
                                                       min_run_per_cos_zenith_bin=3,
                                                       initial_cos_zenith_binning=0.01)
 acceptance_models = acceptance_model_creator.create_acceptance_map_per_observation(obs_collection,
-                                                                                   zenith_bin=True)
+                                                                                   zenith_binning=True)
+```
+
+## Zenith interpolated model
+
+It's also possible to create model interpolated between the binned model per cos zenith. For this use the method create_acceptance_map_per_observation but with the option `zenith_interpolation` set at True. All the parameters controlling the cos zenith binning remain active.
+```python
+acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
+                                                      offset_axis_acceptance,
+                                                      exclude_regions=exclude_regions,
+                                                      oversample_map=10,
+                                                      min_run_per_cos_zenith_bin=3,
+                                                      initial_cos_zenith_binning=0.01)
+acceptance_models = acceptance_model_creator.create_acceptance_map_per_observation(obs_collection,
+                                                                                   zenith_binning=True,
+                                                                                   zenith_interpolation=True)
 ```
 
 # Available model
