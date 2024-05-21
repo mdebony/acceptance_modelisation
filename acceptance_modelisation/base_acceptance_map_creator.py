@@ -573,8 +573,8 @@ class BaseAcceptanceMapCreator(ABC):
 
     def create_acceptance_map_per_observation(self,
                                               observations: Observations,
-                                              zenith_binning: bool = True,
-                                              zenith_interpolation: bool = True,
+                                              zenith_binning: bool = False,
+                                              zenith_interpolation: bool = False,
                                               runwise_normalisation: bool = True,
                                               ) -> dict[Any, BackgroundIRF]:
         """
