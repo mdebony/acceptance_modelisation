@@ -408,7 +408,7 @@ class BaseAcceptanceMapCreator(ABC):
             if norm_background < 0.:
                 logging.error('Invalid normalisation value for run ' + str(id_observation) + ' : ' + str(norm_background))
             elif norm_background > 1.5 or norm_background < 0.5:
-                logging.warning('High correction of the background normalisation normalisation for run ' + str(id_observation) + ' : ' + str(norm_background))
+                logging.warning('High correction of the background normalisation for run ' + str(id_observation) + ' : ' + str(norm_background))
 
             # Apply normalisation to the background model
             normalised_acceptance_map[id_observation] = copy.deepcopy(acceptance_map[id_observation])
@@ -416,11 +416,11 @@ class BaseAcceptanceMapCreator(ABC):
 
         return normalised_acceptance_map
 
-    def create_acceptance_map_cos_zenith_binned(self,
-                                                observations: Observations
-                                                ) -> dict[Any, BackgroundIRF]:
+    def _create_model_cos_zenith_binned(self,
+                                        observations: Observations
+                                        ) -> dict[Any, BackgroundIRF]:
         """
-        Calculate an acceptance map using cos zenith binning and interpolation
+        Calculate a model for each cos zenith bin
 
         Parameters
         ----------
@@ -434,10 +434,12 @@ class BaseAcceptanceMapCreator(ABC):
 
         """
 
+        # Determine initial binning value
         cos_zenith_bin = np.sort(np.arange(1.0, 0. - self.initial_cos_zenith_binning, -self.initial_cos_zenith_binning))
         cos_zenith_observations = [np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in observations]
         run_per_bin = np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0]
 
+        # Adapt binning to have a given number of run in each bin
         i = 0
         while i < len(run_per_bin):
             if run_per_bin[i] < self.min_observation_per_cos_zenith_bin and (i + 1) < len(run_per_bin):
@@ -452,13 +454,17 @@ class BaseAcceptanceMapCreator(ABC):
             else:
                 i += 1
 
+        # Associated each observation to the correct bin
         binned_observations = []
         for i in range((len(cos_zenith_bin) - 1)):
             binned_observations.append(Observations())
         for obs in observations:
             binned_observations[np.digitize(np.cos(obs.get_pointing_altaz(obs.tmid).zen), cos_zenith_bin) - 1].append(obs)
 
+        # Compute the model for each bin
         binned_model = [self.create_acceptance_map(binned_obs) for binned_obs in binned_observations]
+
+        # Determine the center of the bin (weighted as function of the livetime of each observation)
         bin_center = []
         for i in range(len(binned_observations)):
             weighted_cos_zenith_bin_per_obs = []
@@ -466,8 +472,77 @@ class BaseAcceptanceMapCreator(ABC):
             for obs in binned_observations[i]:
                 weighted_cos_zenith_bin_per_obs.append(obs.observation_live_time_duration * np.cos(obs.get_pointing_altaz(obs.tmid).zen))
                 livetime_per_obs.append(obs.observation_live_time_duration)
-            bin_center.append(
-                np.sum([wcos.value for wcos in weighted_cos_zenith_bin_per_obs])/np.sum([livet.value for livet in livetime_per_obs]))
+            bin_center.append(np.sum([wcos.value for wcos in weighted_cos_zenith_bin_per_obs]) / np.sum([livet.value for livet in livetime_per_obs]))
+
+        # Create the dict for output of the function
+        dict_binned_model = {}
+        for i in range(len(binned_model)):
+            dict_binned_model[np.rad2deg(np.arccos(bin_center[i]))] = binned_model[i]
+
+        return dict_binned_model
+
+    def create_acceptance_map_cos_zenith_binned(self,
+                                                observations: Observations
+                                                ) -> dict[Any, BackgroundIRF]:
+        """
+        Calculate an acceptance map per run using cos zenith binning
+
+        Parameters
+        ----------
+        observations : gammapy.data.observations.Observations
+            The collection of observations used to make the acceptance map
+
+        Returns
+        -------
+        background : dict of gammapy.irf.background.Background2D or gammapy.irf.background.Background3D
+            A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
+
+        """
+
+        # Produce the binned model
+        dict_binned_model = self._create_model_cos_zenith_binned(observations)
+        cos_zenith_model = []
+        key_model = []
+        for k in np.sort(list(dict_binned_model.keys())):
+            cos_zenith_model.append(np.cos(np.deg2rad(k)))
+            key_model.append(k)
+
+        # Find the closest model for each observation and associate it to each observation
+        acceptance_map = {}
+        if len(cos_zenith_model) <= 1:
+            logging.warning('Only one zenith bin, zenith binning deactivated')
+        for obs in observations:
+            cos_zenith_observation = np.cos(obs.get_pointing_altaz(obs.tmid).zen)
+            key_closest_model = key_model[(np.abs(cos_zenith_model - cos_zenith_observation)).argmin()]
+            acceptance_map[obs.obs_id] = dict_binned_model[key_closest_model]
+
+        return acceptance_map
+
+    def create_acceptance_map_cos_zenith_interpolated(self,
+                                                      observations: Observations
+                                                      ) -> dict[Any, BackgroundIRF]:
+        """
+        Calculate an acceptance map per run using cos zenith binning and interpolation
+
+        Parameters
+        ----------
+        observations : gammapy.data.observations.Observations
+            The collection of observations used to make the acceptance map
+
+        Returns
+        -------
+        background : dict of gammapy.irf.background.Background2D or gammapy.irf.background.Background3D
+            A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
+
+        """
+
+        # Produce the binned model
+        dict_binned_model = self._create_model_cos_zenith_binned(observations)
+        binned_model = []
+        cos_zenith_model = []
+        for k in np.sort(list(dict_binned_model.keys())):
+            binned_model.append(dict_binned_model[k])
+            cos_zenith_model.append(np.cos(np.deg2rad(k)))
 
         acceptance_map = {}
         if len(binned_model) <= 1:
@@ -478,7 +553,7 @@ class BaseAcceptanceMapCreator(ABC):
             data_cube = np.zeros(tuple([len(binned_model), ] + list(binned_model[0].data.shape))) * binned_model[0].unit
             for i in range(len(binned_model)):
                 data_cube[i] = binned_model[i].data * binned_model[i].unit
-            interp_func = interp1d(x=np.array(bin_center),
+            interp_func = interp1d(x=np.array(cos_zenith_model),
                                    y=np.log10(data_cube.value + np.finfo(np.float64).tiny),
                                    axis=0,
                                    fill_value='extrapolate')
@@ -498,7 +573,8 @@ class BaseAcceptanceMapCreator(ABC):
 
     def create_acceptance_map_per_observation(self,
                                               observations: Observations,
-                                              zenith_bin: bool = True,
+                                              zenith_binning: bool = False,
+                                              zenith_interpolation: bool = False,
                                               runwise_normalisation: bool = True,
                                               ) -> dict[Any, BackgroundIRF]:
         """
@@ -508,7 +584,9 @@ class BaseAcceptanceMapCreator(ABC):
         ----------
         observations : gammapy.data.observations.Observations
             The collection of observations used to make the acceptance map
-        zenith_bin : bool, optional
+        zenith_binning : bool, optional
+            If true the acceptance maps will be generated using zenith binning
+        zenith_interpolation : bool, optional
             If true the acceptance maps will be generated using zenith binning and interpolation
         runwise_normalisation : bool, optional
             If true the acceptance maps will be normalised runwise to the observations
@@ -520,7 +598,9 @@ class BaseAcceptanceMapCreator(ABC):
         """
 
         acceptance_map = {}
-        if zenith_bin:
+        if zenith_interpolation:
+            acceptance_map = self.create_acceptance_map_cos_zenith_interpolated(observations)
+        elif zenith_binning:
             acceptance_map = self.create_acceptance_map_cos_zenith_binned(observations)
         else:
             unique_base_acceptance_map = self.create_acceptance_map(observations)
