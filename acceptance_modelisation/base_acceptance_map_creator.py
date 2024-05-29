@@ -1,5 +1,6 @@
 import copy
 import logging
+
 from abc import ABC, abstractmethod
 from typing import Tuple, List, Any, Optional
 
@@ -28,10 +29,12 @@ class BaseAcceptanceMapCreator(ABC):
                  max_offset: u.Quantity,
                  spatial_resolution: u.Quantity,
                  exclude_regions: Optional[List[SkyRegion]] = None,
-                 min_observation_per_cos_zenith_bin: int = 3,
+                 cos_zenith_binning_method: str = 'min_livetime',
+                 cos_zenith_binning_parameter_value: int = 3600,
                  initial_cos_zenith_binning: float = 0.01,
                  max_fraction_pixel_rotation_fov: float = 0.5,
-                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s) -> None:
+                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
+                 verbose: bool = False) -> None:
         """
         Create the class for calculating radial acceptance model.
 
@@ -45,14 +48,18 @@ class BaseAcceptanceMapCreator(ABC):
             The spatial resolution
         exclude_regions : list of regions.SkyRegion, optional
             Regions with known or putative gamma-ray emission, will be excluded from the calculation of the acceptance map
-        min_observation_per_cos_zenith_bin : int, optional
-            Minimum number of observations per zenith bins
+        cos_zenith_binning_method : str, optional
+            The method used for cos zenith binning: 'min_livetime','min_n_observation'
+        cos_zenith_binning_parameter_value : int, optional
+            Minimum livetime (in seconds) or number of observations per zenith bins
         initial_cos_zenith_binning : float, optional
             Initial bin size for cos zenith binning
         max_fraction_pixel_rotation_fov : float, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
         time_resolution_rotation_fov : astropy.units.Quantity, optional
             Time resolution to use for the computation of the rotation of the FoV
+        verbose : bool, optional
+            If True, print informations related to cos zenith binning
         """
 
         # If no exclusion region, default it as an empty list
@@ -63,8 +70,10 @@ class BaseAcceptanceMapCreator(ABC):
         self.energy_axis = energy_axis
         self.max_offset = max_offset
         self.exclude_regions = exclude_regions
-        self.min_observation_per_cos_zenith_bin = min_observation_per_cos_zenith_bin
+        self.cos_zenith_binning_method = cos_zenith_binning_method
+        self.cos_zenith_binning_parameter_value = cos_zenith_binning_parameter_value
         self.initial_cos_zenith_binning = initial_cos_zenith_binning
+        self.verbose = verbose
 
         # Calculate map parameter
         self.n_bins_map = 2 * int(np.rint((self.max_offset / spatial_resolution).to(u.dimensionless_unscaled)))
@@ -436,19 +445,29 @@ class BaseAcceptanceMapCreator(ABC):
 
         # Determine initial binning value
         cos_zenith_bin = np.sort(np.arange(1.0, 0. - self.initial_cos_zenith_binning, -self.initial_cos_zenith_binning))
-        cos_zenith_observations = [np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in observations]
-        run_per_bin = np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0]
+        cos_zenith_observations = np.array([np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in observations])
+        livetime_observations = np.array([obs.observation_live_time_duration.to_value(u.s) for obs in observations])
 
-        # Adapt binning to have a given number of run in each bin
+        if "livetime" in self.cos_zenith_binning_method:
+            cut_variable_weights = livetime_observations
+        elif self.cos_zenith_binning_method == "min_observation":
+            cut_variable_weights = np.ones(len(cos_zenith_observations), dtype=int)
+        else:
+            logging.error(f"No {self.cos_zenith_binning_method} method available for the cos zenith binning")
+
+        min_cut_per_cos_zenith_bin = self.cos_zenith_binning_parameter_value
+        cut_variable_per_bin = np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=cut_variable_weights)[
+            0]
+        # Adapt binning to have a given number of minimum livetime or run in each bin
         i = 0
-        while i < len(run_per_bin):
-            if run_per_bin[i] < self.min_observation_per_cos_zenith_bin and (i + 1) < len(run_per_bin):
-                run_per_bin[i] += run_per_bin[i + 1]
-                run_per_bin = np.delete(run_per_bin, i + 1)
+        while i < len(cut_variable_per_bin):
+            if cut_variable_per_bin[i] < min_cut_per_cos_zenith_bin and (i + 1) < len(cut_variable_per_bin):
+                cut_variable_per_bin[i] += cut_variable_per_bin[i + 1]
+                cut_variable_per_bin = np.delete(cut_variable_per_bin, i + 1)
                 cos_zenith_bin = np.delete(cos_zenith_bin, i + 1)
-            elif run_per_bin[i] < self.min_observation_per_cos_zenith_bin and (i + 1) == len(run_per_bin) and i > 0:
-                run_per_bin[i - 1] += run_per_bin[i]
-                run_per_bin = np.delete(run_per_bin, i)
+            elif cut_variable_per_bin[i] < min_cut_per_cos_zenith_bin and (i + 1) == len(cut_variable_per_bin) and i > 0:
+                cut_variable_per_bin[i - 1] += cut_variable_per_bin[i]
+                cut_variable_per_bin = np.delete(cut_variable_per_bin, i)
                 cos_zenith_bin = np.delete(cos_zenith_bin, i)
                 i -= 1
             else:
@@ -473,6 +492,13 @@ class BaseAcceptanceMapCreator(ABC):
                 weighted_cos_zenith_bin_per_obs.append(obs.observation_live_time_duration * np.cos(obs.get_pointing_altaz(obs.tmid).zen))
                 livetime_per_obs.append(obs.observation_live_time_duration)
             bin_center.append(np.sum([wcos.value for wcos in weighted_cos_zenith_bin_per_obs]) / np.sum([livet.value for livet in livetime_per_obs]))
+        
+        if self.verbose:
+            print("cos zenith bin edges: ",list(np.round(cos_zenith_bin,2)))
+            print("cos zenith bin centers: ",list(np.round(bin_center,2)))
+            print(f"observation per bin: ", list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0]))
+            print(f"livetime per bin [s]: ", list(
+                np.histogram(cos_zenith_observations,bins=cos_zenith_bin, weights=livetime_observations)[0].astype(int)))
 
         # Create the dict for output of the function
         dict_binned_model = {}
