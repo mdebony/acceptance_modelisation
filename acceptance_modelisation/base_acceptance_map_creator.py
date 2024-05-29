@@ -450,7 +450,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         if "livetime" in self.cos_zenith_binning_method:
             cut_variable_weights = livetime_observations
-        elif self.cos_zenith_binning_method == "min_observation":
+        elif self.cos_zenith_binning_method == "min_n_observation":
             cut_variable_weights = np.ones(len(cos_zenith_observations), dtype=int)
         else:
             logging.error(f"No {self.cos_zenith_binning_method} method available for the cos zenith binning")
