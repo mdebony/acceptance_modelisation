@@ -19,7 +19,7 @@ from regions import CircleSkyRegion, SkyRegion
 from scipy.integrate import cumulative_trapezoid
 from scipy.interpolate import interp1d
 
-from .toolbox import compute_rotation_speed_fov
+from .toolbox import compute_rotation_speed_fov, plot_coszd_binning
 
 
 class BaseAcceptanceMapCreator(ABC):
@@ -499,6 +499,7 @@ class BaseAcceptanceMapCreator(ABC):
             print(f"observation per bin: ", list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0]))
             print(f"livetime per bin [s]: ", list(
                 np.histogram(cos_zenith_observations,bins=cos_zenith_bin, weights=livetime_observations)[0].astype(int)))
+            plot_coszd_binning(cos_zenith_observations,cos_zenith_bin,bin_center,livetime_observations,min_cut_per_cos_zenith_bin,self.cos_zenith_binning_method,zd_lim=(55,75))
 
         # Create the dict for output of the function
         dict_binned_model = {}
