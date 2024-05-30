@@ -122,7 +122,7 @@ acceptance_models = acceptance_model_creator.create_acceptance_map_per_observati
 
 It's also possible to create model binned per cos zenith. For this use the method create_acceptance_map_per_observation but with the option `zenith_binning` set at True.
 The width of zenith bin could be control at the creation of the object with the parameter `initial_cos_zenith_binning`.
-You can chose the `cos_zenith_binning_method`: `min_livetime` or `min_n_observation`  to give a condition on minimum livetime or number of observations for each bin. The algorithm will then automatically rebin to larger bin in order to have in each bin at least `cos_zenith_binning_parameter_value` livetime (in seconds) or observation per bin.
+You can chose the `cos_zenith_binning_method`: `min_livetime` or `min_n_observation`  to give a condition on minimum livetime or number of observations for each bin. The algorithm will then automatically rebin to larger bin in order to have in each bin at least `cos_zenith_binning_parameter_value` livetime (in seconds) or observation per bin. If you add `_per_wobble` to the method name, wobbles will be identified and the binning will require the condition to be fulfilled for each identified wobble.
 In that case the output is a dictionary containing the acceptance model of each observations (with the observation ID as index).
 Set `verbose` to True to get the binning result and a plot of the binned livetime.
 ```python
@@ -130,7 +130,7 @@ acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
                                                       offset_axis_acceptance,
                                                       exclude_regions=exclude_regions,
                                                       oversample_map=10,
-                                                      cos_zenith_binning_method='min_livetime',
+                                                      cos_zenith_binning_method='min_livetime_per_wobble',
                                                       cos_zenith_binning_parameter_value=3600,
                                                       initial_cos_zenith_binning=0.01,
                                                       verbose=True)
