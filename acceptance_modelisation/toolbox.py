@@ -72,12 +72,18 @@ def get_unique_wobble_pointings(observations: Observations, max_angular_separati
         ra_observations = all_ra_observations[mask_allremaining]
         dec_observations = all_dec_observations[mask_allremaining]
 
-    print(f"{len(wobbles_dict)} wobbles were found: \n", wobbles_dict)
+    print(f"{len(wobbles_dict)} wobbles were found:")
+    for key, value in wobbles_dict.items(): print(f"{key}: {list(np.round(value, 2))}")
     return wobbles
 
-def plot_coszd_binning(cos_zenith_observations,cos_zenith_bin,bin_center,livetime_observations,min_cut_per_cos_zenith_bin,cos_zenith_binning_method,zd_lim=(55,75)):
+def plot_coszd_binning(cos_zenith_observations,cos_zenith_bin,bin_center,livetime_observations,min_cut_per_cos_zenith_bin,cos_zenith_binning_method,zd_lim=(55,75),wobble_observations=None,livetime_observations_and_wobble=None):
     fig,ax=plt.subplots(figsize=(5,5))
-    ax.hist(cos_zenith_observations, bins=cos_zenith_bin,weights=livetime_observations,alpha=0.6)
+    wobble = (wobble_observations is not None) and (livetime_observations_and_wobble is not None)
+    title = f"Livetime{' per wobble and'*wobble} per cos(zd) bin\n"
+    if wobble:
+        for i,wobble in enumerate(np.unique(np.array(wobble_observations))): 
+            ax.hist(cos_zenith_observations, bins=cos_zenith_bin,weights=livetime_observations_and_wobble[i],alpha=0.6,label=f"{wobble}")
+    else: ax.hist(cos_zenith_observations, bins=cos_zenith_bin,weights=livetime_observations,alpha=0.6)
 
     new_ticks_coszd=np.concatenate(([np.cos(zd_lim[1]*u.deg)],bin_center,[np.cos(zd_lim[0]*u.deg)]))
 
@@ -103,6 +109,6 @@ def plot_coszd_binning(cos_zenith_observations,cos_zenith_bin,bin_center,livetim
     ax.vlines(cos_zenith_bin,ylim[0],ylim[1],ls=':',color='grey',label='bin edges',alpha=0.5)
     ax.legend(loc='best')
 
-    plt.suptitle("Livetime per cos(zd) bin\n")
+    plt.suptitle(title)
     plt.tight_layout()
     plt.show()

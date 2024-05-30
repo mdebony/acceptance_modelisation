@@ -20,6 +20,7 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  cos_zenith_binning_method: str = 'min_livetime',
                  cos_zenith_binning_parameter_value: int = 3600,
                  initial_cos_zenith_binning: float = 0.01,
+                 max_angular_separation: float = 0.4,
                  max_fraction_pixel_rotation_fov: float = 0.5,
                  time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
                  verbose: bool = False) -> None:
@@ -37,11 +38,13 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
         exclude_regions : list of regions.SkyRegion, optional
             Region with known or putative gamma-ray emission, will be excluded of the calculation of the acceptance map
         cos_zenith_binning_method : str, optional
-            The method used for cos zenith binning: 'min_livetime','min_n_observation'
+            The method used for cos zenith binning: 'min_livetime','min_livetime_per_wobble','min_n_observation'
         cos_zenith_binning_parameter_value : int, optional
             Minimum livetime (in seconds) or number of observations per zenith bins
         initial_cos_zenith_binning : float, optional
             Initial bin size for cos zenith binning
+        max_angular_separation : float, optional
+            The maximum angular separation between identified wobbles, in degrees
         max_fraction_pixel_rotation_fov : float, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
         time_resolution_rotation_fov : astropy.unit.Quantity, optional
@@ -64,7 +67,8 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
         # Initiate upper instance
         super().__init__(energy_axis, max_offset, spatial_resolution, exclude_regions,
                          cos_zenith_binning_method, cos_zenith_binning_parameter_value,
-                         initial_cos_zenith_binning, max_fraction_pixel_rotation_fov, time_resolution_rotation_fov,verbose)
+                         initial_cos_zenith_binning, max_angular_separation, max_fraction_pixel_rotation_fov,
+                         time_resolution_rotation_fov,verbose)
 
     def create_acceptance_map(self, observations: Observations) -> Background2D:
         """

@@ -19,7 +19,7 @@ from regions import CircleSkyRegion, SkyRegion
 from scipy.integrate import cumulative_trapezoid
 from scipy.interpolate import interp1d
 
-from .toolbox import compute_rotation_speed_fov, plot_coszd_binning
+from .toolbox import compute_rotation_speed_fov, get_unique_wobble_pointings, plot_coszd_binning
 
 
 class BaseAcceptanceMapCreator(ABC):
@@ -32,6 +32,7 @@ class BaseAcceptanceMapCreator(ABC):
                  cos_zenith_binning_method: str = 'min_livetime',
                  cos_zenith_binning_parameter_value: int = 3600,
                  initial_cos_zenith_binning: float = 0.01,
+                 max_angular_separation: float = 0.4,
                  max_fraction_pixel_rotation_fov: float = 0.5,
                  time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
                  verbose: bool = False) -> None:
@@ -49,11 +50,13 @@ class BaseAcceptanceMapCreator(ABC):
         exclude_regions : list of regions.SkyRegion, optional
             Regions with known or putative gamma-ray emission, will be excluded from the calculation of the acceptance map
         cos_zenith_binning_method : str, optional
-            The method used for cos zenith binning: 'min_livetime','min_n_observation'
+            The method used for cos zenith binning: 'min_livetime', 'min_livetime_per_wobble', 'min_n_observation', 'min_n_observation_per_wobble'
         cos_zenith_binning_parameter_value : int, optional
             Minimum livetime (in seconds) or number of observations per zenith bins
         initial_cos_zenith_binning : float, optional
             Initial bin size for cos zenith binning
+        max_angular_separation : float, optional
+            The maximum angular separation between identified wobbles, in degrees
         max_fraction_pixel_rotation_fov : float, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
         time_resolution_rotation_fov : astropy.units.Quantity, optional
@@ -71,8 +74,11 @@ class BaseAcceptanceMapCreator(ABC):
         self.max_offset = max_offset
         self.exclude_regions = exclude_regions
         self.cos_zenith_binning_method = cos_zenith_binning_method
+        self.livetime_condition = "livetime" in cos_zenith_binning_method
+        self.wobble_condition = "wobble" in cos_zenith_binning_method
         self.cos_zenith_binning_parameter_value = cos_zenith_binning_parameter_value
         self.initial_cos_zenith_binning = initial_cos_zenith_binning
+        self.max_angular_separation = max_angular_separation
         self.verbose = verbose
 
         # Calculate map parameter
@@ -447,10 +453,12 @@ class BaseAcceptanceMapCreator(ABC):
         cos_zenith_bin = np.sort(np.arange(1.0, 0. - self.initial_cos_zenith_binning, -self.initial_cos_zenith_binning))
         cos_zenith_observations = np.array([np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in observations])
         livetime_observations = np.array([obs.observation_live_time_duration.to_value(u.s) for obs in observations])
-
-        if "livetime" in self.cos_zenith_binning_method:
+        
+        if self.wobble_condition: 
+            wobble_observations = np.array(get_unique_wobble_pointings(observations, self.max_angular_separation))
+        if self.livetime_condition:
             cut_variable_weights = livetime_observations
-        elif self.cos_zenith_binning_method == "min_n_observation":
+        elif "min_n_observation" in self.cos_zenith_binning_method:
             cut_variable_weights = np.ones(len(cos_zenith_observations), dtype=int)
         else:
             logging.error(f"No {self.cos_zenith_binning_method} method available for the cos zenith binning")
@@ -460,12 +468,28 @@ class BaseAcceptanceMapCreator(ABC):
             0]
         # Adapt binning to have a given number of minimum livetime or run in each bin
         i = 0
+        
         while i < len(cut_variable_per_bin):
-            if cut_variable_per_bin[i] < min_cut_per_cos_zenith_bin and (i + 1) < len(cut_variable_per_bin):
-                cut_variable_per_bin[i] += cut_variable_per_bin[i + 1]
-                cut_variable_per_bin = np.delete(cut_variable_per_bin, i + 1)
-                cos_zenith_bin = np.delete(cos_zenith_bin, i + 1)
-            elif cut_variable_per_bin[i] < min_cut_per_cos_zenith_bin and (i + 1) == len(cut_variable_per_bin) and i > 0:
+            in_coszd_bin = (cos_zenith_observations >= cos_zenith_bin[i]) & (
+                    cos_zenith_observations < cos_zenith_bin[i + 1])
+            if self.wobble_condition: 
+                wobble_in_bin = wobble_observations[in_coszd_bin]
+                cut_variable_in_bin = cut_variable_weights[in_coszd_bin]
+                wobble_livetime_in_bin = np.array(
+                    [cut_variable_in_bin[wobble_in_bin == wobble].sum() for wobble in np.unique(wobble_in_bin)])
+                at_least_2_wobble = len(np.unique(wobble_in_bin)) > 1
+                if at_least_2_wobble:
+                    livetime_min_for_each_wobble = np.all(
+                        wobble_livetime_in_bin >= min_cut_per_cos_zenith_bin )
+            
+            if ((self.wobble_condition and ((not at_least_2_wobble) or (not livetime_min_for_each_wobble)))
+                or (cut_variable_per_bin[i] < min_cut_per_cos_zenith_bin)) and (i + 1) < len(cut_variable_per_bin):
+                    cut_variable_per_bin[i] += cut_variable_per_bin[i + 1]
+                    cut_variable_per_bin = np.delete(cut_variable_per_bin, i + 1)
+                    cos_zenith_bin = np.delete(cos_zenith_bin, i + 1)
+                
+            elif cut_variable_per_bin[i] < min_cut_per_cos_zenith_bin and (i + 1) == len(
+                    cut_variable_per_bin) and i > 0:
                 cut_variable_per_bin[i - 1] += cut_variable_per_bin[i]
                 cut_variable_per_bin = np.delete(cut_variable_per_bin, i)
                 cos_zenith_bin = np.delete(cos_zenith_bin, i)
@@ -499,7 +523,18 @@ class BaseAcceptanceMapCreator(ABC):
             print(f"observation per bin: ", list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0]))
             print(f"livetime per bin [s]: ", list(
                 np.histogram(cos_zenith_observations,bins=cos_zenith_bin, weights=livetime_observations)[0].astype(int)))
-            plot_coszd_binning(cos_zenith_observations,cos_zenith_bin,bin_center,livetime_observations,min_cut_per_cos_zenith_bin,self.cos_zenith_binning_method,zd_lim=(55,75))
+            if self.wobble_condition:
+                wobble_observations_bool_arr = [(np.array(wobble_observations.tolist()) == wobble) for wobble in
+                                                np.unique(np.array(wobble_observations))]
+                livetime_observations_and_wobble = [np.array(livetime_observations) * wobble_bool for wobble_bool in
+                                                    wobble_observations_bool_arr]
+                for i, wobble in enumerate(np.unique(np.array(wobble_observations))):
+                    print(
+                        f"{wobble} observation per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=1 * wobble_observations_bool_arr[i])[0])}")
+                    print(
+                        f"{wobble} livetime per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations_and_wobble[i])[0].astype(int))}")
+                plot_coszd_binning(cos_zenith_observations,cos_zenith_bin,bin_center,livetime_observations,min_cut_per_cos_zenith_bin,self.cos_zenith_binning_method,(55,75),wobble_observations,livetime_observations_and_wobble)
+            else: plot_coszd_binning(cos_zenith_observations,cos_zenith_bin,bin_center,livetime_observations,min_cut_per_cos_zenith_bin,self.cos_zenith_binning_method,(55,75))
 
         # Create the dict for output of the function
         dict_binned_model = {}
