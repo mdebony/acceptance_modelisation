@@ -470,32 +470,37 @@ class BaseAcceptanceMapCreator(ABC):
         
         # Adapt binning to have a given number of minimum livetime or run in each bin
         i = 0
+        at_least_2_wobble, cut_variable_min_for_each_wobble, condition_is_fulfilled_per_wobble = False, False, False
         
         while i < len(cut_variable_per_bin):
+            is_last_bin = (i + 1) == len(cut_variable_per_bin)
             in_coszd_bin = (cos_zenith_observations >= cos_zenith_bin[i]) & (
                     cos_zenith_observations < cos_zenith_bin[i + 1])
+            
             if per_wobble: 
                 wobble_in_bin = wobble_observations[in_coszd_bin]
                 cut_variable_in_bin = cut_variable_weights[in_coszd_bin]
-                wobble_livetime_in_bin = np.array(
+                cut_variable_in_bin_per_wobble = np.array(
                     [cut_variable_in_bin[wobble_in_bin == wobble].sum() for wobble in np.unique(wobble_in_bin)])
                 at_least_2_wobble = len(np.unique(wobble_in_bin)) > 1
                 if at_least_2_wobble:
-                    livetime_min_for_each_wobble = np.all(
-                        wobble_livetime_in_bin >= min_cut_per_cos_zenith_bin )
+                    cut_variable_min_for_each_wobble = np.all(
+                        cut_variable_in_bin_per_wobble >= min_cut_per_cos_zenith_bin )
+                condition_is_fulfilled_per_wobble = at_least_2_wobble and cut_variable_min_for_each_wobble
             
-            if ((per_wobble and ((not at_least_2_wobble) or (not livetime_min_for_each_wobble)))
-                or (cut_variable_per_bin[i] < min_cut_per_cos_zenith_bin)) and (i + 1) < len(cut_variable_per_bin):
+            condition_is_fulfilled_in_bin = cut_variable_per_bin[i] >= min_cut_per_cos_zenith_bin
+            
+            if ((per_wobble and not condition_is_fulfilled_per_wobble) or (not condition_is_fulfilled_in_bin)):
+                if not is_last_bin:
                     cut_variable_per_bin[i] += cut_variable_per_bin[i + 1]
                     cut_variable_per_bin = np.delete(cut_variable_per_bin, i + 1)
                     cos_zenith_bin = np.delete(cos_zenith_bin, i + 1)
                 
-            elif cut_variable_per_bin[i] < min_cut_per_cos_zenith_bin and (i + 1) == len(
-                    cut_variable_per_bin) and i > 0:
-                cut_variable_per_bin[i - 1] += cut_variable_per_bin[i]
-                cut_variable_per_bin = np.delete(cut_variable_per_bin, i)
-                cos_zenith_bin = np.delete(cos_zenith_bin, i)
-                i -= 1
+                else:
+                    cut_variable_per_bin[i - 1] += cut_variable_per_bin[i]
+                    cut_variable_per_bin = np.delete(cut_variable_per_bin, i)
+                    cos_zenith_bin = np.delete(cos_zenith_bin, i)
+                    i -= 1
             else:
                 i += 1
 
