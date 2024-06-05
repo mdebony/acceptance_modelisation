@@ -313,7 +313,8 @@ class BaseAcceptanceMapCreator(ABC):
                 exclusion_mask = np.zeros(count_map_obs.counts.data.shape[1:])
                 for i in range(len(time_interval) - 1):
                     # Compute the exclusion region in camera frame for the average time
-                    time = (time_interval[i] + time_interval[i+1])/2
+                    dtime = time_interval[i + 1] - time_interval[i]
+                    time = time_interval[i] + dtime/2
                     average_alt_az_frame = AltAz(obstime=time,
                                                  location=obs.observatory_earth_location)
                     average_alt_az_pointing = obs.get_pointing_icrs(time).transform_to(average_alt_az_frame)
@@ -323,7 +324,7 @@ class BaseAcceptanceMapCreator(ABC):
 
                     exclusion_mask_t = ~geom_image.region_mask(exclusion_region_camera_frame) if len(
                         exclusion_region_camera_frame) > 0 else ~Map.from_geom(geom_image)
-                    exclusion_mask += exclusion_mask_t * (time_interval[i + 1] - time_interval[i]).value
+                    exclusion_mask += exclusion_mask_t * (dtime).value
                 exclusion_mask *= 1 / (time_interval[-1] - time_interval[0]).value
 
                 for j in range(count_map_obs.counts.data.shape[0]):
