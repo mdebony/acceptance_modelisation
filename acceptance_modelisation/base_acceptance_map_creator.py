@@ -446,38 +446,44 @@ class BaseAcceptanceMapCreator(ABC):
             A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
 
         """
-        # Determine binning method
-        methods = np.array(['min_livetime', 'min_livetime_per_wobble', 'min_n_observation', 'min_n_observation_per_wobble'])
-        if self.cos_zenith_binning_method in methods: i_method = np.where(methods == self.cos_zenith_binning_method)[0][0]
-        else: logging.error(f"{self.cos_zenith_binning_method} not in cos zenith binning methods")
-
-        per_wobble = i_method in [1,3]
+        # Determine binning method. Convention : per_wobble methods have negative values
+        methods = {'min_livetime': 1, 'min_livetime_per_wobble': -1, 'min_n_observation': 2,
+                   'min_n_observation_per_wobble': -2}
+        try:
+            i_method = methods[self.cos_zenith_binning_method]
+        except KeyError:
+            logging.error(f" KeyError : {self.cos_zenith_binning_method} not a valid zenith binning method.\nValid "
+                          f"methods are {[*methods]}")
+            raise
+        per_wobble = i_method < 0
 
         # Determine initial binning value
         cos_zenith_bin = np.sort(np.arange(1.0, 0. - self.initial_cos_zenith_binning, -self.initial_cos_zenith_binning))
         cos_zenith_observations = np.array([np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in observations])
         livetime_observations = np.array([obs.observation_live_time_duration.to_value(u.s) for obs in observations])
-        
-        if i_method in [0,1]: cut_variable_weights = livetime_observations
-        elif i_method in [2,3]: cut_variable_weights = np.ones(len(cos_zenith_observations), dtype=int)
 
-        if per_wobble: 
+        if i_method in [-1, 1]:
+            cut_variable_weights = livetime_observations
+        elif i_method in [-2, 2]:
+            cut_variable_weights = np.ones(len(cos_zenith_observations), dtype=int)
+
+        if per_wobble:
             wobble_observations = np.array(get_unique_wobble_pointings(observations, self.max_angular_separation))
-        
+
         min_cut_per_cos_zenith_bin = self.cos_zenith_binning_parameter_value
         cut_variable_per_bin = np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=cut_variable_weights)[
             0]
-        
+
         # Adapt binning to have a given number of minimum livetime or run in each bin
         i = 0
         at_least_2_wobble, cut_variable_min_for_each_wobble, condition_is_fulfilled_per_wobble = False, False, False
-        
+
         while i < len(cut_variable_per_bin):
             is_last_bin = (i + 1) == len(cut_variable_per_bin)
             in_coszd_bin = (cos_zenith_observations >= cos_zenith_bin[i]) & (
                     cos_zenith_observations < cos_zenith_bin[i + 1])
-            
-            if per_wobble: 
+
+            if per_wobble:
                 wobble_in_bin = wobble_observations[in_coszd_bin]
                 cut_variable_in_bin = cut_variable_weights[in_coszd_bin]
                 cut_variable_in_bin_per_wobble = np.array(
@@ -485,17 +491,17 @@ class BaseAcceptanceMapCreator(ABC):
                 at_least_2_wobble = len(np.unique(wobble_in_bin)) > 1
                 if at_least_2_wobble:
                     cut_variable_min_for_each_wobble = np.all(
-                        cut_variable_in_bin_per_wobble >= min_cut_per_cos_zenith_bin )
+                        cut_variable_in_bin_per_wobble >= min_cut_per_cos_zenith_bin)
                 condition_is_fulfilled_per_wobble = at_least_2_wobble and cut_variable_min_for_each_wobble
-            
+
             condition_is_fulfilled_in_bin = cut_variable_per_bin[i] >= min_cut_per_cos_zenith_bin
-            
+
             if ((per_wobble and not condition_is_fulfilled_per_wobble) or (not condition_is_fulfilled_in_bin)):
                 if not is_last_bin:
                     cut_variable_per_bin[i] += cut_variable_per_bin[i + 1]
                     cut_variable_per_bin = np.delete(cut_variable_per_bin, i + 1)
                     cos_zenith_bin = np.delete(cos_zenith_bin, i + 1)
-                
+
                 else:
                     cut_variable_per_bin[i - 1] += cut_variable_per_bin[i]
                     cut_variable_per_bin = np.delete(cut_variable_per_bin, i)
@@ -523,13 +529,13 @@ class BaseAcceptanceMapCreator(ABC):
                 weighted_cos_zenith_bin_per_obs.append(obs.observation_live_time_duration * np.cos(obs.get_pointing_altaz(obs.tmid).zen))
                 livetime_per_obs.append(obs.observation_live_time_duration)
             bin_center.append(np.sum([wcos.value for wcos in weighted_cos_zenith_bin_per_obs]) / np.sum([livet.value for livet in livetime_per_obs]))
-        
+
         if self.verbose:
-            print("cos zenith bin edges: ",list(np.round(cos_zenith_bin,2)))
-            print("cos zenith bin centers: ",list(np.round(bin_center,2)))
+            print("cos zenith bin edges: ", list(np.round(cos_zenith_bin, 2)))
+            print("cos zenith bin centers: ", list(np.round(bin_center, 2)))
             print(f"observation per bin: ", list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0]))
             print(f"livetime per bin [s]: ", list(
-                np.histogram(cos_zenith_observations,bins=cos_zenith_bin, weights=livetime_observations)[0].astype(int)))
+                np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations)[0].astype(int)))
             if per_wobble:
                 wobble_observations_bool_arr = [(np.array(wobble_observations.tolist()) == wobble) for wobble in
                                                 np.unique(np.array(wobble_observations))]
