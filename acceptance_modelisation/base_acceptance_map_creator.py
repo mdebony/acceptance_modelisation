@@ -19,7 +19,7 @@ from regions import CircleSkyRegion, SkyRegion
 from scipy.integrate import cumulative_trapezoid
 from scipy.interpolate import interp1d
 
-from .toolbox import compute_rotation_speed_fov, get_unique_wobble_pointings, plot_coszd_binning
+from .toolbox import compute_rotation_speed_fov, get_unique_wobble_pointings
 
 
 class BaseAcceptanceMapCreator(ABC):
@@ -548,8 +548,6 @@ class BaseAcceptanceMapCreator(ABC):
                         f"{wobble} observation per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=1 * wobble_observations_bool_arr[i])[0])}")
                     print(
                         f"{wobble} livetime per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations_and_wobble[i])[0].astype(int))}")
-                plot_coszd_binning(cos_zenith_observations,cos_zenith_bin,bin_center,livetime_observations,min_cut_per_cos_zenith_bin,self.cos_zenith_binning_method,(55,75),wobble_observations,livetime_observations_and_wobble)
-            else: plot_coszd_binning(cos_zenith_observations,cos_zenith_bin,bin_center,livetime_observations,min_cut_per_cos_zenith_bin,self.cos_zenith_binning_method,(55,75))
 
         # Create the dict for output of the function
         dict_binned_model = {}
