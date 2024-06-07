@@ -501,12 +501,14 @@ class BaseAcceptanceMapCreator(ABC):
                     cut_variable_per_bin[i] += cut_variable_per_bin[i + 1]
                     cut_variable_per_bin = np.delete(cut_variable_per_bin, i + 1)
                     cos_zenith_bin = np.delete(cos_zenith_bin, i + 1)
-
-                else:
+                
+                elif i > 0:
                     cut_variable_per_bin[i - 1] += cut_variable_per_bin[i]
                     cut_variable_per_bin = np.delete(cut_variable_per_bin, i)
                     cos_zenith_bin = np.delete(cos_zenith_bin, i)
                     i -= 1
+                else:
+                    i += 1
             else:
                 i += 1
 
