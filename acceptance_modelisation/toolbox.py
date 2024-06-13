@@ -1,11 +1,11 @@
-import numpy as np
 import astropy.units as u
 from astropy.coordinates import AltAz, SkyCoord, angular_separation
 from astropy.coordinates.earth import OMEGA_EARTH, EarthLocation
 from astropy.time import Time
-import matplotlib.pyplot as plt
 from gammapy.data import Observations
 from copy import deepcopy
+import logging
+import numpy as np
 
 def compute_rotation_speed_fov(time_evaluation: Time,
                                pointing_sky: SkyCoord,
@@ -29,10 +29,11 @@ def compute_rotation_speed_fov(time_evaluation: Time,
     """
     pointing_altaz = pointing_sky.transform_to(AltAz(obstime=time_evaluation,
                                                      location=observatory_earth_location))
-    omega_earth = OMEGA_EARTH*u.rad
+    omega_earth = OMEGA_EARTH * u.rad
     omega = omega_earth * np.cos(observatory_earth_location.lat) * np.cos(pointing_altaz.az) / np.cos(
         pointing_altaz.alt)
     return omega
+
 
 def get_unique_wobble_pointings(observations: Observations, max_angular_separation=0.4):
     """
@@ -44,12 +45,12 @@ def get_unique_wobble_pointings(observations: Observations, max_angular_separati
     observations : gammapy.data.observations.Observations
         The list of observations
     max_angular_separation : float
-        The maximum angular separation between identified wobbles, in degrees
+        The maximum angular separation between a wobble position and associated runs, in degrees
 
     Returns
     -------
-    unique_wobble_list : list
-        A list of the wobbles detected and their associated similar pointings (angular separation < 0.4°)
+    unique_wobble_list : `numpy.array`
+        Array of wobble name associated with each run
     """
     all_ra_observations = np.array([obs.get_pointing_icrs(obs.tmid).ra.to_value(u.deg) for obs in observations])
     all_dec_observations = np.array([obs.get_pointing_icrs(obs.tmid).dec.to_value(u.deg) for obs in observations])
@@ -57,21 +58,25 @@ def get_unique_wobble_pointings(observations: Observations, max_angular_separati
     dec_observations = deepcopy(all_dec_observations)
     wobbles = np.empty(shape=len(all_ra_observations), dtype=np.object_)
     wobbles_dict = {}
-    i=0
-    mask_allremaining = np.ones(shape=len(all_ra_observations),dtype=bool)
-    while len(ra_observations)>0:
-        i=i+1
-        keywobble='W'+str(i)
-        mask = (angular_separation(ra_observations[0]*u.deg, dec_observations[0]*u.deg,
-                                   ra_observations*u.deg, dec_observations*u.deg) < max_angular_separation*u.deg)
-        mask_2 = (angular_separation(np.mean(ra_observations[mask])*u.deg, np.mean(dec_observations[mask])*u.deg,
-                                     all_ra_observations*u.deg, all_dec_observations*u.deg) < max_angular_separation*u.deg)
-        wobbles_dict[keywobble] = [np.mean(all_ra_observations[mask_2 & mask_allremaining]), np.mean(all_dec_observations[mask_2 & mask_allremaining])]
+    i = 0
+    mask_allremaining = np.ones(shape=len(all_ra_observations), dtype=bool)
+    while len(ra_observations) > 0:
+        i = i + 1
+        keywobble = 'W' + str(i)
+        mask = (angular_separation(ra_observations[0] * u.deg, dec_observations[0] * u.deg,
+                                   ra_observations * u.deg, dec_observations * u.deg) < max_angular_separation * u.deg)
+        mask_2 = (angular_separation(np.mean(ra_observations[mask]) * u.deg,
+                                     np.mean(dec_observations[mask]) * u.deg,
+                                     all_ra_observations * u.deg,
+                                     all_dec_observations * u.deg) < max_angular_separation * u.deg)
+        wobbles_dict[keywobble] = [np.mean(all_ra_observations[mask_2 & mask_allremaining]),
+                                   np.mean(all_dec_observations[mask_2 & mask_allremaining])]
         wobbles[mask_2 & mask_allremaining] = keywobble
         mask_allremaining = mask_allremaining * ~mask_2
         ra_observations = all_ra_observations[mask_allremaining]
         dec_observations = all_dec_observations[mask_allremaining]
 
-    print(f"{len(wobbles_dict)} wobbles were found:")
-    for key, value in wobbles_dict.items(): print(f"{key}: {list(np.round(value, 2))}")
+    logging.info(f"{len(wobbles_dict)} wobbles were found:")
+    for key, value in wobbles_dict.items():
+        logging.info(f"{key}: {list(np.round(value, 2))}")
     return wobbles
