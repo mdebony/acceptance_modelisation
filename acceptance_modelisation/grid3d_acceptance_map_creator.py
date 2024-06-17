@@ -109,7 +109,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
 
         mask = exp_map > 0  # Handles fully overlapping exclusion regions in the 'size' seed computation
         # Seeds the charge normalisation to the observed counts corrected for exclusion region reduction to exposure
-        raw_seeds['size'] = np.sum(count_map[mask] * exp_map_total[mask] / exp_map[mask]) * len(mask) / np.sum(mask)
+        raw_seeds['size'] = np.sum(count_map[mask] * exp_map_total[mask] / exp_map[mask]) / np.mean(mask)
         bounds['size'] = (raw_seeds['size'] * 0.1, raw_seeds['size'] * 10)
 
         # reorder seeds to fnc parameter order
@@ -139,10 +139,11 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         m.simplex().migrad()
         if logger.level <= logging.INFO:
             func = fnc(x, y, **m.values.to_dict()) * exp_map / exp_map_total
+            func[exp_map == 0] = 1
             rel_residuals = 100 * (count_map - func) / func
             logger.info(f"Fit valid : {m.valid}\n"
                         f"Results ({fnc.__name__}) :\n{m.values.to_dict()}")
-            logger.info("Average relative residuals : %.1f %%," % (np.sum(rel_residuals)) +
+            logger.info("Average relative residuals : %.1f %%," % (np.mean(rel_residuals)) +
                         "Std = %.2f %%" % (np.std(rel_residuals)) + "\n")
 
         return fnc(x, y, **m.values.to_dict())
