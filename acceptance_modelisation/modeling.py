@@ -3,11 +3,11 @@ Define the background model functions for fits and associated seeds and bounds.
 """
 import numpy as np
 
-__all__ = ['FIT_FUNCTION',
+__all__ = ['bilinear_gaussian2d',
+           'FIT_FUNCTION',
            'gaussian2d',
            'log_factorial',
-           'log_poisson',
-           'bilinear_gaussian2d']
+           'log_poisson']
 
 
 def log_factorial(count_map):

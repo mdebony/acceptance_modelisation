@@ -195,7 +195,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                                                           exp_map_background_downsample.data[e],
                                                           )
         else:
-            raise NotImplementedError(f"Requested method {self.method} is not valid.")
+            raise NotImplementedError(f"Requested method '{self.method}' is not valid.")
         solid_angle = 4. * (np.sin(bin_width_x / 2.) * np.sin(bin_width_y / 2.)) * u.steradian
         data_background = corrected_counts / solid_angle[np.newaxis, :, :] / self.energy_axis.bin_width[:, np.newaxis,
                                                                              np.newaxis] / livetime
