@@ -83,7 +83,7 @@ class BaseAcceptanceMapCreator(ABC):
     @staticmethod
     def _transform_obs_to_camera_frame(obs: Observation) -> Observation:
         """
-        Transform events, pointing and exclusion regions of an obs from a sky frame to camera frame
+        Transform events and pointing of an obs from a sky frame to camera frame
 
         Parameters
         ----------
@@ -94,8 +94,6 @@ class BaseAcceptanceMapCreator(ABC):
         -------
         obs_camera_frame : gammapy.data.observations.Observation
             The observation transformed for reference in camera frame
-        exclusion_region_camera_frame : list of region.SkyRegion
-            The list of exclusion region in camera frame
         """
 
         # Transform to altaz frame
@@ -301,16 +299,19 @@ class BaseAcceptanceMapCreator(ABC):
                 geom = RegionGeom.from_regions(self.exclude_regions)
                 mask = geom.contains(obs.events.radec)
                 obs._events = obs.events.select_row_subset(~mask)
-
-                time_interval = self._compute_time_intervals_based_on_fov_rotation(obs)
+                # Create a count map in camera frame
                 camera_frame_obs = self._transform_obs_to_camera_frame(obs)
                 count_map_obs, _ = self._create_map(camera_frame_obs, self.geom, [], add_bkg=False)
-
+                # Create exposure maps and fill them with the obs livetime
                 exp_map_obs = MapDataset.create(geom=count_map_obs.geoms['geom'])
                 exp_map_obs_total = MapDataset.create(geom=count_map_obs.geoms['geom'])
                 exp_map_obs.counts.data = camera_frame_obs.observation_live_time_duration.value
                 exp_map_obs_total.counts.data = camera_frame_obs.observation_live_time_duration.value
+
+                # Evaluate the average exclusion mask in camera frame
+                # by evaluating it on time intervals short compared to the field of view rotation
                 exclusion_mask = np.zeros(count_map_obs.counts.data.shape[1:])
+                time_interval = self._compute_time_intervals_based_on_fov_rotation(obs)
                 for i in range(len(time_interval) - 1):
                     # Compute the exclusion region in camera frame for the average time
                     dtime = time_interval[i + 1] - time_interval[i]
@@ -324,12 +325,16 @@ class BaseAcceptanceMapCreator(ABC):
 
                     exclusion_mask_t = ~geom_image.region_mask(exclusion_region_camera_frame) if len(
                         exclusion_region_camera_frame) > 0 else ~Map.from_geom(geom_image)
+                    # Add the exclusion mask in camera frame weighted by the time interval duration
                     exclusion_mask += exclusion_mask_t * (dtime).value
+                # Normalise the exclusion mask by the full observation duration
                 exclusion_mask *= 1 / (time_interval[-1] - time_interval[0]).value
 
+                # Correct the exposure map by the exclusion region
                 for j in range(count_map_obs.counts.data.shape[0]):
                     exp_map_obs.counts.data[j, :, :] = exp_map_obs.counts.data[j, :, :] * exclusion_mask
 
+                # Stack counts and exposure maps and livetime of all observations
                 count_map_background.data += count_map_obs.counts.data
                 exp_map_background.data += exp_map_obs.counts.data
                 exp_map_background_total.data += exp_map_obs_total.counts.data
