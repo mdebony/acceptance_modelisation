@@ -13,7 +13,7 @@ from gammapy.datasets import MapDataset
 from gammapy.irf import Background2D, Background3D
 from gammapy.irf.background import BackgroundIRF
 from gammapy.makers import MapDatasetMaker, SafeMaskMaker, FoVBackgroundMaker
-from gammapy.maps import WcsNDMap, WcsGeom, Map, MapAxis
+from gammapy.maps import WcsNDMap, WcsGeom, Map, MapAxis, RegionGeom
 from regions import CircleSkyRegion, SkyRegion
 from scipy.integrate import cumulative_trapezoid
 from scipy.interpolate import interp1d
@@ -80,9 +80,10 @@ class BaseAcceptanceMapCreator(ABC):
         self.max_fraction_pixel_rotation_fov = max_fraction_pixel_rotation_fov
         self.time_resolution_rotation_fov = time_resolution_rotation_fov
 
-    def _transform_obs_to_camera_frame(self, obs: Observation) -> Tuple[Observation, List[SkyRegion]]:
+    @staticmethod
+    def _transform_obs_to_camera_frame(obs: Observation) -> Observation:
         """
-        Transform events, pointing and exclusion regions of an obs from a sky frame to camera frame
+        Transform events and pointing of an obs from a sky frame to camera frame
 
         Parameters
         ----------
@@ -93,15 +94,13 @@ class BaseAcceptanceMapCreator(ABC):
         -------
         obs_camera_frame : gammapy.data.observations.Observation
             The observation transformed for reference in camera frame
-        exclusion_region_camera_frame : list of region.SkyRegion
-            The list of exclusion region in camera frame
         """
 
         # Transform to altaz frame
         altaz_frame = AltAz(obstime=obs.events.time,
                             location=obs.observatory_earth_location)
         events_altaz = obs.events.radec.transform_to(altaz_frame)
-        pointing_altaz = obs.get_pointing_icrs(obs.tmid).transform_to(altaz_frame)
+        pointing_altaz = obs.get_pointing_icrs(obs.events.time).transform_to(altaz_frame)
 
         # Rotation to transform to camera frame
         camera_frame = SkyOffsetFrame(origin=AltAz(alt=pointing_altaz.alt,
@@ -125,13 +124,7 @@ class BaseAcceptanceMapCreator(ABC):
                                        aeff=obs.aeff)
         obs_camera_frame._location = obs.observatory_earth_location
 
-        # Compute the exclusion region in camera frame for the average time
-        average_alt_az_frame = AltAz(obstime=obs_camera_frame.tmid,
-                                     location=obs_camera_frame.observatory_earth_location)
-        average_alt_az_pointing = obs.get_pointing_icrs(obs.tmid).transform_to(average_alt_az_frame)
-        exclusion_region_camera_frame = self._transform_exclusion_region_to_camera_frame(average_alt_az_pointing)
-
-        return obs_camera_frame, exclusion_region_camera_frame
+        return obs_camera_frame
 
     def _transform_exclusion_region_to_camera_frame(self, pointing_altaz: AltAz) -> List[SkyRegion]:
         """
@@ -244,31 +237,6 @@ class BaseAcceptanceMapCreator(ABC):
 
         return map_obs, exclusion_mask
 
-    def _create_camera_map(self,
-                           obs: Observation
-                           ) -> Tuple[MapDataset, WcsNDMap]:
-        """
-        Create the sky map in camera coordinates used for computation.
-
-        Parameters
-        ----------
-        obs : gammapy.data.observations.Observation
-            The observation used to make the sky map.
-
-        Returns
-        -------
-        map_dataset : gammapy.datasets.MapDataset
-            The map dataset in camera coordinates.
-        exclusion_mask : gammapy.maps.WcsNDMap
-            The exclusion mask in camera coordinates.
-        """
-
-        obs_camera_frame, exclusion_region_camera_frame = self._transform_obs_to_camera_frame(obs)
-        map_obs, exclusion_mask = self._create_map(obs_camera_frame, self.geom,
-                                                   exclusion_region_camera_frame, add_bkg=False)
-
-        return map_obs, exclusion_mask
-
     def _compute_time_intervals_based_on_fov_rotation(self, obs: Observation) -> Time:
         """
         Calculate time intervals based on the rotation of the Field of View (FoV).
@@ -300,7 +268,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         return time_interval
 
-    def _create_base_computation_map(self, observations: Observation) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Unit]:
+    def _create_base_computation_map(self, observations: Observations) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Unit]:
         """
         From a list of observations return a stacked finely binned counts and exposure map in camera frame to compute a model
 
@@ -327,24 +295,50 @@ class BaseAcceptanceMapCreator(ABC):
 
         with erfa_astrom.set(ErfaAstromInterpolator(1000 * u.s)):
             for obs in observations:
+                # Filter events in exclusion regions
+                geom = RegionGeom.from_regions(self.exclude_regions)
+                mask = geom.contains(obs.events.radec)
+                obs._events = obs.events.select_row_subset(~mask)
+                # Create a count map in camera frame
+                camera_frame_obs = self._transform_obs_to_camera_frame(obs)
+                count_map_obs, _ = self._create_map(camera_frame_obs, self.geom, [], add_bkg=False)
+                # Create exposure maps and fill them with the obs livetime
+                exp_map_obs = MapDataset.create(geom=count_map_obs.geoms['geom'])
+                exp_map_obs_total = MapDataset.create(geom=count_map_obs.geoms['geom'])
+                exp_map_obs.counts.data = camera_frame_obs.observation_live_time_duration.value
+                exp_map_obs_total.counts.data = camera_frame_obs.observation_live_time_duration.value
+
+                # Evaluate the average exclusion mask in camera frame
+                # by evaluating it on time intervals short compared to the field of view rotation
+                exclusion_mask = np.zeros(count_map_obs.counts.data.shape[1:])
                 time_interval = self._compute_time_intervals_based_on_fov_rotation(obs)
                 for i in range(len(time_interval) - 1):
-                    cut_obs = obs.select_time(Time([time_interval[i], time_interval[i + 1]]))
-                    count_map_obs, exclusion_mask = self._create_camera_map(cut_obs)
+                    # Compute the exclusion region in camera frame for the average time
+                    dtime = time_interval[i + 1] - time_interval[i]
+                    time = time_interval[i] + dtime/2
+                    average_alt_az_frame = AltAz(obstime=time,
+                                                 location=obs.observatory_earth_location)
+                    average_alt_az_pointing = obs.get_pointing_icrs(time).transform_to(average_alt_az_frame)
+                    exclusion_region_camera_frame = self._transform_exclusion_region_to_camera_frame(
+                        average_alt_az_pointing)
+                    geom_image = self.geom.to_image()
 
-                    exp_map_obs = MapDataset.create(geom=count_map_obs.geoms['geom'])
-                    exp_map_obs_total = MapDataset.create(geom=count_map_obs.geoms['geom'])
-                    exp_map_obs.counts.data = cut_obs.observation_live_time_duration.value
-                    exp_map_obs_total.counts.data = cut_obs.observation_live_time_duration.value
+                    exclusion_mask_t = ~geom_image.region_mask(exclusion_region_camera_frame) if len(
+                        exclusion_region_camera_frame) > 0 else ~Map.from_geom(geom_image)
+                    # Add the exclusion mask in camera frame weighted by the time interval duration
+                    exclusion_mask += exclusion_mask_t * (dtime).value
+                # Normalise the exclusion mask by the full observation duration
+                exclusion_mask *= 1 / (time_interval[-1] - time_interval[0]).value
 
-                    for j in range(count_map_obs.counts.data.shape[0]):
-                        count_map_obs.counts.data[j, :, :] = count_map_obs.counts.data[j, :, :] * exclusion_mask
-                        exp_map_obs.counts.data[j, :, :] = exp_map_obs.counts.data[j, :, :] * exclusion_mask
+                # Correct the exposure map by the exclusion region
+                for j in range(count_map_obs.counts.data.shape[0]):
+                    exp_map_obs.counts.data[j, :, :] = exp_map_obs.counts.data[j, :, :] * exclusion_mask
 
-                    count_map_background.data += count_map_obs.counts.data
-                    exp_map_background.data += exp_map_obs.counts.data
-                    exp_map_background_total.data += exp_map_obs_total.counts.data
-                    livetime += cut_obs.observation_live_time_duration
+                # Stack counts and exposure maps and livetime of all observations
+                count_map_background.data += count_map_obs.counts.data
+                exp_map_background.data += exp_map_obs.counts.data
+                exp_map_background_total.data += exp_map_obs_total.counts.data
+                livetime += camera_frame_obs.observation_live_time_duration
 
         return count_map_background, exp_map_background, exp_map_background_total, livetime
 
