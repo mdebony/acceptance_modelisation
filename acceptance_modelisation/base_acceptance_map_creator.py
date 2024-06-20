@@ -32,7 +32,7 @@ class BaseAcceptanceMapCreator(ABC):
                  cos_zenith_binning_method: str = 'min_livetime',
                  cos_zenith_binning_parameter_value: int = 3600,
                  initial_cos_zenith_binning: float = 0.01,
-                 max_angular_separation: float = 0.4,
+                 max_angular_separation_wobble: float = 0.4 * u.deg,
                  max_fraction_pixel_rotation_fov: float = 0.5,
                  time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
                  verbose: bool = False) -> None:
@@ -55,7 +55,7 @@ class BaseAcceptanceMapCreator(ABC):
             Minimum livetime (in seconds) or number of observations per zenith bins
         initial_cos_zenith_binning : float, optional
             Initial bin size for cos zenith binning
-        max_angular_separation : float, optional
+        max_angular_separation_wobble : float, optional
             The maximum angular separation between identified wobbles, in degrees
         max_fraction_pixel_rotation_fov : float, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
@@ -76,7 +76,7 @@ class BaseAcceptanceMapCreator(ABC):
         self.cos_zenith_binning_method = cos_zenith_binning_method
         self.cos_zenith_binning_parameter_value = cos_zenith_binning_parameter_value
         self.initial_cos_zenith_binning = initial_cos_zenith_binning
-        self.max_angular_separation = max_angular_separation
+        self.max_angular_separation_wobble = max_angular_separation_wobble
         self.verbose = verbose
 
         # Calculate map parameter
@@ -468,7 +468,7 @@ class BaseAcceptanceMapCreator(ABC):
             cut_variable_weights = np.ones(len(cos_zenith_observations), dtype=int)
 
         if per_wobble:
-            wobble_observations = np.array(get_unique_wobble_pointings(observations, self.max_angular_separation))
+            wobble_observations = np.array(get_unique_wobble_pointings(observations, self.max_angular_separation_wobble))
 
         min_cut_per_cos_zenith_bin = self.cos_zenith_binning_parameter_value
         cut_variable_per_bin = np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=cut_variable_weights)[

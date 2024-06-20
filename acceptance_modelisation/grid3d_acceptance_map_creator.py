@@ -20,7 +20,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  cos_zenith_binning_method: str = 'min_livetime',
                  cos_zenith_binning_parameter_value: int = 3600,
                  initial_cos_zenith_binning: float = 0.01,
-                 max_angular_separation: float = 0.4,
+                 max_angular_separation_wobble: float = 0.4 * u.deg,
                  max_fraction_pixel_rotation_fov: float = 0.5,
                  time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
                  verbose: bool = False) -> None:
@@ -43,7 +43,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
             Minimum livetime (in seconds) or number of observations per zenith bins
         initial_cos_zenith_binning : float, optional
             Initial bin size for cos zenith binning
-        max_angular_separation : float, optional
+        max_angular_separation_wobble : float, optional
             The maximum angular separation between identified wobbles, in degrees
         max_fraction_pixel_rotation_fov : float, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
@@ -71,7 +71,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         # Initiate upper instance
         super().__init__(energy_axis, max_offset, spatial_resolution, exclude_regions,
                          cos_zenith_binning_method, cos_zenith_binning_parameter_value,
-                         initial_cos_zenith_binning, max_angular_separation, max_fraction_pixel_rotation_fov,
+                         initial_cos_zenith_binning, max_angular_separation_wobble, max_fraction_pixel_rotation_fov,
                          time_resolution_rotation_fov, verbose)
 
     def create_acceptance_map(self, observations: Observations) -> Background3D:

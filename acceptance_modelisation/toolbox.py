@@ -35,7 +35,7 @@ def compute_rotation_speed_fov(time_evaluation: Time,
     return omega
 
 
-def get_unique_wobble_pointings(observations: Observations, max_angular_separation=0.4):
+def get_unique_wobble_pointings(observations: Observations, max_angular_separation_wobble=0.4 * u.deg):
     """
     Compute the angular separation between pointings and return a list
     of detected wobbles with their associated similar pointings
@@ -44,7 +44,7 @@ def get_unique_wobble_pointings(observations: Observations, max_angular_separati
     ----------
     observations : gammapy.data.observations.Observations
         The list of observations
-    max_angular_separation : float
+    max_angular_separation_wobble : float
         The maximum angular separation between a wobble position and associated runs, in degrees
 
     Returns
@@ -52,31 +52,31 @@ def get_unique_wobble_pointings(observations: Observations, max_angular_separati
     unique_wobble_list : `numpy.array`
         Array of wobble name associated with each run
     """
-    all_ra_observations = np.array([obs.get_pointing_icrs(obs.tmid).ra.to_value(u.deg) for obs in observations])
-    all_dec_observations = np.array([obs.get_pointing_icrs(obs.tmid).dec.to_value(u.deg) for obs in observations])
+    all_ra_observations = np.array([obs.get_pointing_icrs(obs.tmid).ra.to_value(u.deg) for obs in observations]) * u.deg
+    all_dec_observations = np.array([obs.get_pointing_icrs(obs.tmid).dec.to_value(u.deg) for obs in observations]) * u.deg
     ra_observations = deepcopy(all_ra_observations)
     dec_observations = deepcopy(all_dec_observations)
     wobbles = np.empty(shape=len(all_ra_observations), dtype=np.object_)
     wobbles_dict = {}
     i = 0
-    mask_allremaining = np.ones(shape=len(all_ra_observations), dtype=bool)
+    mask_all_remaining = np.ones(shape=len(all_ra_observations), dtype=bool)
     while len(ra_observations) > 0:
         i = i + 1
         keywobble = 'W' + str(i)
-        mask = (angular_separation(ra_observations[0] * u.deg, dec_observations[0] * u.deg,
-                                   ra_observations * u.deg, dec_observations * u.deg) < max_angular_separation * u.deg)
-        mask_2 = (angular_separation(np.mean(ra_observations[mask]) * u.deg,
-                                     np.mean(dec_observations[mask]) * u.deg,
-                                     all_ra_observations * u.deg,
-                                     all_dec_observations * u.deg) < max_angular_separation * u.deg)
-        wobbles_dict[keywobble] = [np.mean(all_ra_observations[mask_2 & mask_allremaining]),
-                                   np.mean(all_dec_observations[mask_2 & mask_allremaining])]
-        wobbles[mask_2 & mask_allremaining] = keywobble
-        mask_allremaining = mask_allremaining * ~mask_2
-        ra_observations = all_ra_observations[mask_allremaining]
-        dec_observations = all_dec_observations[mask_allremaining]
+        mask = (angular_separation(ra_observations[0], dec_observations[0],
+                                   ra_observations, dec_observations) < max_angular_separation_wobble)
+        mask_2 = (angular_separation(np.mean(ra_observations[mask]),
+                                     np.mean(dec_observations[mask]),
+                                     all_ra_observations,
+                                     all_dec_observations) < max_angular_separation_wobble)
+        wobbles_dict[keywobble] = [np.mean(all_ra_observations[mask_2 & mask_all_remaining]),
+                                   np.mean(all_dec_observations[mask_2 & mask_all_remaining])]
+        wobbles[mask_2 & mask_all_remaining] = keywobble
+        mask_all_remaining = mask_all_remaining * ~mask_2
+        ra_observations = all_ra_observations[mask_all_remaining]
+        dec_observations = all_dec_observations[mask_all_remaining]
 
     logging.info(f"{len(wobbles_dict)} wobbles were found:")
     for key, value in wobbles_dict.items():
-        logging.info(f"{key}: {list(np.round(value, 2))}")
+        logging.info(f"{key}: [{value[0].round(2)}, {value[1].round(2)}]")
     return wobbles
