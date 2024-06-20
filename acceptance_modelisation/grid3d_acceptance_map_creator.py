@@ -113,7 +113,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         bounds['size'] = (raw_seeds['size'] * 0.1, raw_seeds['size'] * 10)
 
         # reorder seeds to fnc parameter order
-        param_fnc = list(fnc.__code__.co_varnames)
+        param_fnc = list(fnc.__code__.co_varnames[:fnc.__code__.co_argcount])
         param_fnc.remove('x')
         param_fnc.remove('y')
         seeds = {key: raw_seeds[key] for key in param_fnc}
