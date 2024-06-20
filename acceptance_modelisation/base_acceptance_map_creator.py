@@ -410,9 +410,9 @@ class BaseAcceptanceMapCreator(ABC):
 
         return normalised_acceptance_map
 
-    def _create_model_cos_zenith_binned(self,
-                                        observations: Observations
-                                        ) -> dict[Any, BackgroundIRF]:
+    def create_model_cos_zenith_binned(self,
+                                       observations: Observations
+                                       ) -> dict[Any, BackgroundIRF]:
         """
         Calculate a model for each cos zenith bin
 
