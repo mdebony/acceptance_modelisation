@@ -10,7 +10,7 @@ from iminuit import Minuit
 from regions import SkyRegion
 
 from .base_acceptance_map_creator import BaseAcceptanceMapCreator
-from .modeling import *
+from .modeling import FIT_FUNCTION, log_factorial, log_poisson
 
 logger = logging.getLogger(__name__)
 
