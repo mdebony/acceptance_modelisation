@@ -476,7 +476,8 @@ class BaseAcceptanceMapCreator(ABC):
         return dict_binned_model
 
     def create_acceptance_map_cos_zenith_binned(self,
-                                                observations: Observations
+                                                observations: Observations,
+                                                off_observations: Observations = None
                                                 ) -> dict[Any, BackgroundIRF]:
         """
         Calculate an acceptance map per run using cos zenith binning
@@ -484,7 +485,9 @@ class BaseAcceptanceMapCreator(ABC):
         Parameters
         ----------
         observations : gammapy.data.observations.Observations
-            The collection of observations used to make the acceptance map
+            The collection of observations for which will be targeted the acceptance map
+        off_observations : gammapy.data.observations.Observations
+            The collection of observations used to generate the acceptance map, if None will be the observations provided as target
 
         Returns
         -------
@@ -493,8 +496,11 @@ class BaseAcceptanceMapCreator(ABC):
 
         """
 
+        if off_observations is None:
+            off_observations = observations
+
         # Produce the binned model
-        dict_binned_model = self._create_model_cos_zenith_binned(observations)
+        dict_binned_model = self.create_model_cos_zenith_binned(off_observations)
         cos_zenith_model = []
         key_model = []
         for k in np.sort(list(dict_binned_model.keys())):
@@ -513,7 +519,8 @@ class BaseAcceptanceMapCreator(ABC):
         return acceptance_map
 
     def create_acceptance_map_cos_zenith_interpolated(self,
-                                                      observations: Observations
+                                                      observations: Observations,
+                                                      off_observations: Observations = None
                                                       ) -> dict[Any, BackgroundIRF]:
         """
         Calculate an acceptance map per run using cos zenith binning and interpolation
@@ -521,7 +528,9 @@ class BaseAcceptanceMapCreator(ABC):
         Parameters
         ----------
         observations : gammapy.data.observations.Observations
-            The collection of observations used to make the acceptance map
+            The collection of observations for which will be targeted the acceptance map
+        off_observations : gammapy.data.observations.Observations
+            The collection of observations used to generate the acceptance map, if None will be the observations provided as target
 
         Returns
         -------
@@ -530,8 +539,11 @@ class BaseAcceptanceMapCreator(ABC):
 
         """
 
+        if off_observations is None:
+            off_observations = observations
+
         # Produce the binned model
-        dict_binned_model = self._create_model_cos_zenith_binned(observations)
+        dict_binned_model = self.create_model_cos_zenith_binned(off_observations)
         binned_model = []
         cos_zenith_model = []
         for k in np.sort(list(dict_binned_model.keys())):
@@ -570,6 +582,7 @@ class BaseAcceptanceMapCreator(ABC):
                                               zenith_binning: bool = False,
                                               zenith_interpolation: bool = False,
                                               runwise_normalisation: bool = True,
+                                              off_observations: Observations = None,
                                               ) -> dict[Any, BackgroundIRF]:
         """
         Calculate an acceptance map with the norm adjusted for each run
@@ -577,13 +590,15 @@ class BaseAcceptanceMapCreator(ABC):
         Parameters
         ----------
         observations : gammapy.data.observations.Observations
-            The collection of observations used to make the acceptance map
+            The collection of observations for which will be targeted the acceptance map
         zenith_binning : bool, optional
             If true the acceptance maps will be generated using zenith binning
         zenith_interpolation : bool, optional
             If true the acceptance maps will be generated using zenith binning and interpolation
         runwise_normalisation : bool, optional
             If true the acceptance maps will be normalised runwise to the observations
+        off_observations : gammapy.data.observations.Observations
+            The collection of observations used to generate the acceptance map, if None will be the observations provided as target
 
         Returns
         -------
@@ -591,13 +606,16 @@ class BaseAcceptanceMapCreator(ABC):
             A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
         """
 
+        if off_observations is None:
+            off_observations = observations
+
         acceptance_map = {}
         if zenith_interpolation:
             acceptance_map = self.create_acceptance_map_cos_zenith_interpolated(observations)
         elif zenith_binning:
             acceptance_map = self.create_acceptance_map_cos_zenith_binned(observations)
         else:
-            unique_base_acceptance_map = self.create_acceptance_map(observations)
+            unique_base_acceptance_map = self.create_acceptance_map(off_observations)
             for obs in observations:
                 acceptance_map[obs.obs_id] = unique_base_acceptance_map
 
