@@ -1,5 +1,6 @@
 import copy
 import logging
+
 from abc import ABC, abstractmethod
 from typing import Tuple, List, Any, Optional
 
@@ -13,12 +14,12 @@ from gammapy.datasets import MapDataset
 from gammapy.irf import Background2D, Background3D
 from gammapy.irf.background import BackgroundIRF
 from gammapy.makers import MapDatasetMaker, SafeMaskMaker, FoVBackgroundMaker
-from gammapy.maps import WcsNDMap, WcsGeom, Map, MapAxis
+from gammapy.maps import WcsNDMap, WcsGeom, Map, MapAxis, RegionGeom
 from regions import CircleSkyRegion, SkyRegion
 from scipy.integrate import cumulative_trapezoid
 from scipy.interpolate import interp1d
 
-from .toolbox import compute_rotation_speed_fov
+from .toolbox import compute_rotation_speed_fov, get_unique_wobble_pointings
 
 
 class BaseAcceptanceMapCreator(ABC):
@@ -28,10 +29,13 @@ class BaseAcceptanceMapCreator(ABC):
                  max_offset: u.Quantity,
                  spatial_resolution: u.Quantity,
                  exclude_regions: Optional[List[SkyRegion]] = None,
-                 min_observation_per_cos_zenith_bin: int = 3,
+                 cos_zenith_binning_method: str = 'min_livetime',
+                 cos_zenith_binning_parameter_value: int = 3600,
                  initial_cos_zenith_binning: float = 0.01,
+                 max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
                  max_fraction_pixel_rotation_fov: float = 0.5,
-                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s) -> None:
+                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
+                 verbose: bool = False) -> None:
         """
         Create the class for calculating radial acceptance model.
 
@@ -45,14 +49,20 @@ class BaseAcceptanceMapCreator(ABC):
             The spatial resolution
         exclude_regions : list of regions.SkyRegion, optional
             Regions with known or putative gamma-ray emission, will be excluded from the calculation of the acceptance map
-        min_observation_per_cos_zenith_bin : int, optional
-            Minimum number of observations per zenith bins
+        cos_zenith_binning_method : str, optional
+            The method used for cos zenith binning: 'min_livetime', 'min_livetime_per_wobble', 'min_n_observation', 'min_n_observation_per_wobble'
+        cos_zenith_binning_parameter_value : int, optional
+            Minimum livetime (in seconds) or number of observations per zenith bins
         initial_cos_zenith_binning : float, optional
             Initial bin size for cos zenith binning
+        max_angular_separation_wobble : u.Quantity, optional
+            The maximum angular separation between identified wobbles, in degrees
         max_fraction_pixel_rotation_fov : float, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
         time_resolution_rotation_fov : astropy.units.Quantity, optional
             Time resolution to use for the computation of the rotation of the FoV
+        verbose : bool, optional
+            If True, print informations related to cos zenith binning
         """
 
         # If no exclusion region, default it as an empty list
@@ -63,8 +73,11 @@ class BaseAcceptanceMapCreator(ABC):
         self.energy_axis = energy_axis
         self.max_offset = max_offset
         self.exclude_regions = exclude_regions
-        self.min_observation_per_cos_zenith_bin = min_observation_per_cos_zenith_bin
+        self.cos_zenith_binning_method = cos_zenith_binning_method
+        self.cos_zenith_binning_parameter_value = cos_zenith_binning_parameter_value
         self.initial_cos_zenith_binning = initial_cos_zenith_binning
+        self.max_angular_separation_wobble = max_angular_separation_wobble
+        self.verbose = verbose
 
         # Calculate map parameter
         self.n_bins_map = 2 * int(np.rint((self.max_offset / spatial_resolution).to(u.dimensionless_unscaled)))
@@ -80,9 +93,10 @@ class BaseAcceptanceMapCreator(ABC):
         self.max_fraction_pixel_rotation_fov = max_fraction_pixel_rotation_fov
         self.time_resolution_rotation_fov = time_resolution_rotation_fov
 
-    def _transform_obs_to_camera_frame(self, obs: Observation) -> Tuple[Observation, List[SkyRegion]]:
+    @staticmethod
+    def _transform_obs_to_camera_frame(obs: Observation) -> Observation:
         """
-        Transform events, pointing and exclusion regions of an obs from a sky frame to camera frame
+        Transform events and pointing of an obs from a sky frame to camera frame
 
         Parameters
         ----------
@@ -93,15 +107,13 @@ class BaseAcceptanceMapCreator(ABC):
         -------
         obs_camera_frame : gammapy.data.observations.Observation
             The observation transformed for reference in camera frame
-        exclusion_region_camera_frame : list of region.SkyRegion
-            The list of exclusion region in camera frame
         """
 
         # Transform to altaz frame
         altaz_frame = AltAz(obstime=obs.events.time,
                             location=obs.observatory_earth_location)
         events_altaz = obs.events.radec.transform_to(altaz_frame)
-        pointing_altaz = obs.get_pointing_icrs(obs.tmid).transform_to(altaz_frame)
+        pointing_altaz = obs.get_pointing_icrs(obs.events.time).transform_to(altaz_frame)
 
         # Rotation to transform to camera frame
         camera_frame = SkyOffsetFrame(origin=AltAz(alt=pointing_altaz.alt,
@@ -125,13 +137,7 @@ class BaseAcceptanceMapCreator(ABC):
                                        aeff=obs.aeff)
         obs_camera_frame._location = obs.observatory_earth_location
 
-        # Compute the exclusion region in camera frame for the average time
-        average_alt_az_frame = AltAz(obstime=obs_camera_frame.tmid,
-                                     location=obs_camera_frame.observatory_earth_location)
-        average_alt_az_pointing = obs.get_pointing_icrs(obs.tmid).transform_to(average_alt_az_frame)
-        exclusion_region_camera_frame = self._transform_exclusion_region_to_camera_frame(average_alt_az_pointing)
-
-        return obs_camera_frame, exclusion_region_camera_frame
+        return obs_camera_frame
 
     def _transform_exclusion_region_to_camera_frame(self, pointing_altaz: AltAz) -> List[SkyRegion]:
         """
@@ -244,31 +250,6 @@ class BaseAcceptanceMapCreator(ABC):
 
         return map_obs, exclusion_mask
 
-    def _create_camera_map(self,
-                           obs: Observation
-                           ) -> Tuple[MapDataset, WcsNDMap]:
-        """
-        Create the sky map in camera coordinates used for computation.
-
-        Parameters
-        ----------
-        obs : gammapy.data.observations.Observation
-            The observation used to make the sky map.
-
-        Returns
-        -------
-        map_dataset : gammapy.datasets.MapDataset
-            The map dataset in camera coordinates.
-        exclusion_mask : gammapy.maps.WcsNDMap
-            The exclusion mask in camera coordinates.
-        """
-
-        obs_camera_frame, exclusion_region_camera_frame = self._transform_obs_to_camera_frame(obs)
-        map_obs, exclusion_mask = self._create_map(obs_camera_frame, self.geom,
-                                                   exclusion_region_camera_frame, add_bkg=False)
-
-        return map_obs, exclusion_mask
-
     def _compute_time_intervals_based_on_fov_rotation(self, obs: Observation) -> Time:
         """
         Calculate time intervals based on the rotation of the Field of View (FoV).
@@ -300,7 +281,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         return time_interval
 
-    def _create_base_computation_map(self, observations: Observation) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Unit]:
+    def _create_base_computation_map(self, observations: Observations) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Unit]:
         """
         From a list of observations return a stacked finely binned counts and exposure map in camera frame to compute a model
 
@@ -327,24 +308,50 @@ class BaseAcceptanceMapCreator(ABC):
 
         with erfa_astrom.set(ErfaAstromInterpolator(1000 * u.s)):
             for obs in observations:
+                # Filter events in exclusion regions
+                geom = RegionGeom.from_regions(self.exclude_regions)
+                mask = geom.contains(obs.events.radec)
+                obs._events = obs.events.select_row_subset(~mask)
+                # Create a count map in camera frame
+                camera_frame_obs = self._transform_obs_to_camera_frame(obs)
+                count_map_obs, _ = self._create_map(camera_frame_obs, self.geom, [], add_bkg=False)
+                # Create exposure maps and fill them with the obs livetime
+                exp_map_obs = MapDataset.create(geom=count_map_obs.geoms['geom'])
+                exp_map_obs_total = MapDataset.create(geom=count_map_obs.geoms['geom'])
+                exp_map_obs.counts.data = camera_frame_obs.observation_live_time_duration.value
+                exp_map_obs_total.counts.data = camera_frame_obs.observation_live_time_duration.value
+
+                # Evaluate the average exclusion mask in camera frame
+                # by evaluating it on time intervals short compared to the field of view rotation
+                exclusion_mask = np.zeros(count_map_obs.counts.data.shape[1:])
                 time_interval = self._compute_time_intervals_based_on_fov_rotation(obs)
                 for i in range(len(time_interval) - 1):
-                    cut_obs = obs.select_time(Time([time_interval[i], time_interval[i + 1]]))
-                    count_map_obs, exclusion_mask = self._create_camera_map(cut_obs)
+                    # Compute the exclusion region in camera frame for the average time
+                    dtime = time_interval[i + 1] - time_interval[i]
+                    time = time_interval[i] + dtime/2
+                    average_alt_az_frame = AltAz(obstime=time,
+                                                 location=obs.observatory_earth_location)
+                    average_alt_az_pointing = obs.get_pointing_icrs(time).transform_to(average_alt_az_frame)
+                    exclusion_region_camera_frame = self._transform_exclusion_region_to_camera_frame(
+                        average_alt_az_pointing)
+                    geom_image = self.geom.to_image()
 
-                    exp_map_obs = MapDataset.create(geom=count_map_obs.geoms['geom'])
-                    exp_map_obs_total = MapDataset.create(geom=count_map_obs.geoms['geom'])
-                    exp_map_obs.counts.data = cut_obs.observation_live_time_duration.value
-                    exp_map_obs_total.counts.data = cut_obs.observation_live_time_duration.value
+                    exclusion_mask_t = ~geom_image.region_mask(exclusion_region_camera_frame) if len(
+                        exclusion_region_camera_frame) > 0 else ~Map.from_geom(geom_image)
+                    # Add the exclusion mask in camera frame weighted by the time interval duration
+                    exclusion_mask += exclusion_mask_t * (dtime).value
+                # Normalise the exclusion mask by the full observation duration
+                exclusion_mask *= 1 / (time_interval[-1] - time_interval[0]).value
 
-                    for j in range(count_map_obs.counts.data.shape[0]):
-                        count_map_obs.counts.data[j, :, :] = count_map_obs.counts.data[j, :, :] * exclusion_mask
-                        exp_map_obs.counts.data[j, :, :] = exp_map_obs.counts.data[j, :, :] * exclusion_mask
+                # Correct the exposure map by the exclusion region
+                for j in range(count_map_obs.counts.data.shape[0]):
+                    exp_map_obs.counts.data[j, :, :] = exp_map_obs.counts.data[j, :, :] * exclusion_mask
 
-                    count_map_background.data += count_map_obs.counts.data
-                    exp_map_background.data += exp_map_obs.counts.data
-                    exp_map_background_total.data += exp_map_obs_total.counts.data
-                    livetime += cut_obs.observation_live_time_duration
+                # Stack counts and exposure maps and livetime of all observations
+                count_map_background.data += count_map_obs.counts.data
+                exp_map_background.data += exp_map_obs.counts.data
+                exp_map_background_total.data += exp_map_obs_total.counts.data
+                livetime += camera_frame_obs.observation_live_time_duration
 
         return count_map_background, exp_map_background, exp_map_background_total, livetime
 
@@ -433,24 +440,69 @@ class BaseAcceptanceMapCreator(ABC):
             A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
 
         """
+        # Determine binning method. Convention : per_wobble methods have negative values
+        methods = {'min_livetime': 1, 'min_livetime_per_wobble': -1, 'min_n_observation': 2,
+                   'min_n_observation_per_wobble': -2}
+        try:
+            i_method = methods[self.cos_zenith_binning_method]
+        except KeyError:
+            logging.error(f" KeyError : {self.cos_zenith_binning_method} not a valid zenith binning method.\nValid "
+                          f"methods are {[*methods]}")
+            raise
+        per_wobble = i_method < 0
 
         # Determine initial binning value
         cos_zenith_bin = np.sort(np.arange(1.0, 0. - self.initial_cos_zenith_binning, -self.initial_cos_zenith_binning))
-        cos_zenith_observations = [np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in observations]
-        run_per_bin = np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0]
+        cos_zenith_observations = np.array([np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in observations])
+        livetime_observations = np.array([obs.observation_live_time_duration.to_value(u.s) for obs in observations])
 
-        # Adapt binning to have a given number of run in each bin
+        if i_method in [-1, 1]:
+            cut_variable_weights = livetime_observations
+        elif i_method in [-2, 2]:
+            cut_variable_weights = np.ones(len(cos_zenith_observations), dtype=int)
+
+        if per_wobble:
+            wobble_observations = np.array(get_unique_wobble_pointings(observations, self.max_angular_separation_wobble))
+
+        min_cut_per_cos_zenith_bin = self.cos_zenith_binning_parameter_value
+        cut_variable_per_bin = np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=cut_variable_weights)[
+            0]
+
+        # Adapt binning to have a given number of minimum livetime or run in each bin
         i = 0
-        while i < len(run_per_bin):
-            if run_per_bin[i] < self.min_observation_per_cos_zenith_bin and (i + 1) < len(run_per_bin):
-                run_per_bin[i] += run_per_bin[i + 1]
-                run_per_bin = np.delete(run_per_bin, i + 1)
-                cos_zenith_bin = np.delete(cos_zenith_bin, i + 1)
-            elif run_per_bin[i] < self.min_observation_per_cos_zenith_bin and (i + 1) == len(run_per_bin) and i > 0:
-                run_per_bin[i - 1] += run_per_bin[i]
-                run_per_bin = np.delete(run_per_bin, i)
-                cos_zenith_bin = np.delete(cos_zenith_bin, i)
-                i -= 1
+        at_least_2_wobble, cut_variable_min_for_each_wobble, condition_is_fulfilled_per_wobble = False, False, False
+
+        while i < len(cut_variable_per_bin):
+            is_last_bin = (i + 1) == len(cut_variable_per_bin)
+            in_coszd_bin = (cos_zenith_observations >= cos_zenith_bin[i]) & (
+                    cos_zenith_observations < cos_zenith_bin[i + 1])
+
+            if per_wobble:
+                wobble_in_bin = wobble_observations[in_coszd_bin]
+                cut_variable_in_bin = cut_variable_weights[in_coszd_bin]
+                cut_variable_in_bin_per_wobble = np.array(
+                    [cut_variable_in_bin[wobble_in_bin == wobble].sum() for wobble in np.unique(wobble_in_bin)])
+                at_least_2_wobble = len(np.unique(wobble_in_bin)) > 1
+                if at_least_2_wobble:
+                    cut_variable_min_for_each_wobble = np.all(
+                        cut_variable_in_bin_per_wobble >= min_cut_per_cos_zenith_bin)
+                condition_is_fulfilled_per_wobble = at_least_2_wobble and cut_variable_min_for_each_wobble
+
+            condition_is_fulfilled_in_bin = cut_variable_per_bin[i] >= min_cut_per_cos_zenith_bin
+
+            if ((per_wobble and not condition_is_fulfilled_per_wobble) or (not condition_is_fulfilled_in_bin)):
+                if not is_last_bin:
+                    cut_variable_per_bin[i] += cut_variable_per_bin[i + 1]
+                    cut_variable_per_bin = np.delete(cut_variable_per_bin, i + 1)
+                    cos_zenith_bin = np.delete(cos_zenith_bin, i + 1)
+                
+                elif i > 0:
+                    cut_variable_per_bin[i - 1] += cut_variable_per_bin[i]
+                    cut_variable_per_bin = np.delete(cut_variable_per_bin, i)
+                    cos_zenith_bin = np.delete(cos_zenith_bin, i)
+                    i -= 1
+                else:
+                    i += 1
             else:
                 i += 1
 
@@ -473,6 +525,23 @@ class BaseAcceptanceMapCreator(ABC):
                 weighted_cos_zenith_bin_per_obs.append(obs.observation_live_time_duration * np.cos(obs.get_pointing_altaz(obs.tmid).zen))
                 livetime_per_obs.append(obs.observation_live_time_duration)
             bin_center.append(np.sum([wcos.value for wcos in weighted_cos_zenith_bin_per_obs]) / np.sum([livet.value for livet in livetime_per_obs]))
+
+        if self.verbose:
+            print("cos zenith bin edges: ", list(np.round(cos_zenith_bin, 2)))
+            print("cos zenith bin centers: ", list(np.round(bin_center, 2)))
+            print(f"observation per bin: ", list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0]))
+            print(f"livetime per bin [s]: ", list(
+                np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations)[0].astype(int)))
+            if per_wobble:
+                wobble_observations_bool_arr = [(np.array(wobble_observations.tolist()) == wobble) for wobble in
+                                                np.unique(np.array(wobble_observations))]
+                livetime_observations_and_wobble = [np.array(livetime_observations) * wobble_bool for wobble_bool in
+                                                    wobble_observations_bool_arr]
+                for i, wobble in enumerate(np.unique(np.array(wobble_observations))):
+                    print(
+                        f"{wobble} observation per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=1 * wobble_observations_bool_arr[i])[0])}")
+                    print(
+                        f"{wobble} livetime per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations_and_wobble[i])[0].astype(int))}")
 
         # Create the dict for output of the function
         dict_binned_model = {}
