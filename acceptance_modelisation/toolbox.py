@@ -44,7 +44,7 @@ def get_unique_wobble_pointings(observations: Observations, max_angular_separati
     ----------
     observations : gammapy.data.observations.Observations
         The list of observations
-    max_angular_separation_wobble : float
+    max_angular_separation_wobble : u.Quantity
         The maximum angular separation between a wobble position and associated runs, in degrees
 
     Returns

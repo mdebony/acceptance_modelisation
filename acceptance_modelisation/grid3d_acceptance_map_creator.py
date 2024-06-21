@@ -20,7 +20,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  cos_zenith_binning_method: str = 'min_livetime',
                  cos_zenith_binning_parameter_value: int = 3600,
                  initial_cos_zenith_binning: float = 0.01,
-                 max_angular_separation_wobble: float = 0.4 * u.deg,
+                 max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
                  max_fraction_pixel_rotation_fov: float = 0.5,
                  time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
                  verbose: bool = False) -> None:
