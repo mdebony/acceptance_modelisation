@@ -328,7 +328,7 @@ class BaseAcceptanceMapCreator(ABC):
                 for i in range(len(time_interval) - 1):
                     # Compute the exclusion region in camera frame for the average time
                     dtime = time_interval[i + 1] - time_interval[i]
-                    time = time_interval[i] + dtime/2
+                    time = time_interval[i] + dtime / 2
                     average_alt_az_frame = AltAz(obstime=time,
                                                  location=obs.observatory_earth_location)
                     average_alt_az_pointing = obs.get_pointing_icrs(time).transform_to(average_alt_az_frame)
@@ -413,13 +413,17 @@ class BaseAcceptanceMapCreator(ABC):
             norm_background = parameters[parameters['name'] == 'norm']['value'][0]
 
             if norm_background < 0.:
-                logging.error('Invalid normalisation value for run ' + str(id_observation) + ' : ' + str(norm_background))
+                logging.error(
+                    'Invalid normalisation value for run ' + str(id_observation) + ' : ' + str(norm_background))
             elif norm_background > 1.5 or norm_background < 0.5:
-                logging.warning('High correction of the background normalisation for run ' + str(id_observation) + ' : ' + str(norm_background))
+                logging.warning(
+                    'High correction of the background normalisation for run ' + str(id_observation) + ' : ' + str(
+                        norm_background))
 
             # Apply normalisation to the background model
             normalised_acceptance_map[id_observation] = copy.deepcopy(acceptance_map[id_observation])
-            normalised_acceptance_map[id_observation].data = normalised_acceptance_map[id_observation].data * norm_background
+            normalised_acceptance_map[id_observation].data = normalised_acceptance_map[
+                                                                 id_observation].data * norm_background
 
         return normalised_acceptance_map
 
@@ -456,62 +460,67 @@ class BaseAcceptanceMapCreator(ABC):
         cos_zenith_observations = np.array([np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in observations])
         livetime_observations = np.array([obs.observation_live_time_duration.to_value(u.s) for obs in observations])
 
+        # Select the quantity used to count observations
         if i_method in [-1, 1]:
             cut_variable_weights = livetime_observations
         elif i_method in [-2, 2]:
             cut_variable_weights = np.ones(len(cos_zenith_observations), dtype=int)
 
+        # Gather runs per separation angle or all together. Define the minimum multiplicity (-1) to create a zenith bin.
         if per_wobble:
-            wobble_observations = np.array(get_unique_wobble_pointings(observations, self.max_angular_separation_wobble))
+            wobble_observations = np.array(
+                get_unique_wobble_pointings(observations, self.max_angular_separation_wobble))
+            multiplicity_wob = 1
+        else:
+            wobble_observations = np.full(len(cos_zenith_observations), 'any', dtype=np.object_)
+            multiplicity_wob = 0
 
-        min_cut_per_cos_zenith_bin = self.cos_zenith_binning_parameter_value
-        cut_variable_per_bin = np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=cut_variable_weights)[
-            0]
+        cumsum_variable = {}
+        for wobble in np.unique(wobble_observations):
+            # Create an array of cumulative weight of the selected variable vs cos(zenith)
+            cumsum_variable[wobble] = np.cumsum(np.histogram(cos_zenith_observations[wobble_observations == wobble],
+                                                             bins=cos_zenith_bin,
+                                                             weights=cut_variable_weights[
+                                                                 wobble_observations == wobble])[0])
+        # Initiate the list of index of selected zenith bin edges
+        zenith_selected = [0]
 
-        # Adapt binning to have a given number of minimum livetime or run in each bin
         i = 0
-        at_least_2_wobble, cut_variable_min_for_each_wobble, condition_is_fulfilled_per_wobble = False, False, False
+        n = len(cos_zenith_bin) - 2
 
-        while i < len(cut_variable_per_bin):
-            is_last_bin = (i + 1) == len(cut_variable_per_bin)
-            in_coszd_bin = (cos_zenith_observations >= cos_zenith_bin[i]) & (
-                    cos_zenith_observations < cos_zenith_bin[i + 1])
+        while i < n:
+            # For each wobble, find the index of the first zenith which fulfills the zd binning criteria if any
+            # Then flatten and sort the array
+            candidate_i = np.sort((np.concatenate([np.ravel(
+                np.argwhere(cum_cut_variable >= self.cos_zenith_binning_parameter_value))[:1]
+                                                   for cum_cut_variable in cumsum_variable.values()])))
 
-            if per_wobble:
-                wobble_in_bin = wobble_observations[in_coszd_bin]
-                cut_variable_in_bin = cut_variable_weights[in_coszd_bin]
-                cut_variable_in_bin_per_wobble = np.array(
-                    [cut_variable_in_bin[wobble_in_bin == wobble].sum() for wobble in np.unique(wobble_in_bin)])
-                at_least_2_wobble = len(np.unique(wobble_in_bin)) > 1
-                if at_least_2_wobble:
-                    cut_variable_min_for_each_wobble = np.all(
-                        cut_variable_in_bin_per_wobble >= min_cut_per_cos_zenith_bin)
-                condition_is_fulfilled_per_wobble = at_least_2_wobble and cut_variable_min_for_each_wobble
-
-            condition_is_fulfilled_in_bin = cut_variable_per_bin[i] >= min_cut_per_cos_zenith_bin
-
-            if ((per_wobble and not condition_is_fulfilled_per_wobble) or (not condition_is_fulfilled_in_bin)):
-                if not is_last_bin:
-                    cut_variable_per_bin[i] += cut_variable_per_bin[i + 1]
-                    cut_variable_per_bin = np.delete(cut_variable_per_bin, i + 1)
-                    cos_zenith_bin = np.delete(cos_zenith_bin, i + 1)
-                
-                elif i > 0:
-                    cut_variable_per_bin[i - 1] += cut_variable_per_bin[i]
-                    cut_variable_per_bin = np.delete(cut_variable_per_bin, i)
-                    cos_zenith_bin = np.delete(cos_zenith_bin, i)
-                    i -= 1
-                else:
-                    i += 1
+            if len(candidate_i) > multiplicity_wob:
+                # If the criteria is fulfilled save the correct index.
+                # The first and only candidate_i in the non-per_wobble case and the second in the per_wobble case.
+                i = candidate_i[multiplicity_wob]
+                zenith_selected.append(i + 1)
+                for wobble in np.unique(wobble_observations):
+                    # Reduce the cumulative sum by the value at the selected index for the next iteration
+                    cumsum_variable[wobble] -= cumsum_variable[wobble][i]
             else:
                 i += 1
+                # The zenith bin creation criteria is not fulfilled, the last bin edge is set to the end of the
+                # cos(zenith) array
+                if i == 0:
+                    zenith_selected.append(n + 1)
+                else:
+                    zenith_selected[-1] = n + 1
+                    i = n
+        cos_zenith_bin = cos_zenith_bin[zenith_selected]
 
-        # Associated each observation to the correct bin
+        # Associate each observation to the correct bin
         binned_observations = []
         for i in range((len(cos_zenith_bin) - 1)):
             binned_observations.append(Observations())
         for obs in observations:
-            binned_observations[np.digitize(np.cos(obs.get_pointing_altaz(obs.tmid).zen), cos_zenith_bin) - 1].append(obs)
+            binned_observations[np.digitize(np.cos(obs.get_pointing_altaz(obs.tmid).zen), cos_zenith_bin) - 1].append(
+                obs)
 
         # Compute the model for each bin
         binned_model = [self.create_acceptance_map(binned_obs) for binned_obs in binned_observations]
@@ -522,16 +531,19 @@ class BaseAcceptanceMapCreator(ABC):
             weighted_cos_zenith_bin_per_obs = []
             livetime_per_obs = []
             for obs in binned_observations[i]:
-                weighted_cos_zenith_bin_per_obs.append(obs.observation_live_time_duration * np.cos(obs.get_pointing_altaz(obs.tmid).zen))
+                weighted_cos_zenith_bin_per_obs.append(
+                    obs.observation_live_time_duration * np.cos(obs.get_pointing_altaz(obs.tmid).zen))
                 livetime_per_obs.append(obs.observation_live_time_duration)
-            bin_center.append(np.sum([wcos.value for wcos in weighted_cos_zenith_bin_per_obs]) / np.sum([livet.value for livet in livetime_per_obs]))
+            bin_center.append(np.sum([wcos.value for wcos in weighted_cos_zenith_bin_per_obs]) / np.sum(
+                [livet.value for livet in livetime_per_obs]))
 
         if self.verbose:
             print("cos zenith bin edges: ", list(np.round(cos_zenith_bin, 2)))
             print("cos zenith bin centers: ", list(np.round(bin_center, 2)))
             print(f"observation per bin: ", list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0]))
             print(f"livetime per bin [s]: ", list(
-                np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations)[0].astype(int)))
+                np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations)[0].astype(
+                    int)))
             if per_wobble:
                 wobble_observations_bool_arr = [(np.array(wobble_observations.tolist()) == wobble) for wobble in
                                                 np.unique(np.array(wobble_observations))]
