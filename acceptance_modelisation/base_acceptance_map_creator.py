@@ -492,7 +492,7 @@ class BaseAcceptanceMapCreator(ABC):
             # For each wobble, find the index of the first zenith which fulfills the zd binning criteria if any
             # Then concatenate and sort the results for all wobbles
             candidate_i_per_wobble = [np.nonzero(cum_cut_variable >= self.cos_zenith_binning_parameter_value)[0][:1]
-                                      for cum_cut_variable in cumsum_variable.values()]
+                                      for cum_cut_variable in cumsum_variable.values()]  # nonzero is assumed sorted
             candidate_i = np.sort(np.concatenate(candidate_i_per_wobble))
 
             if len(candidate_i) > multiplicity_wob:
