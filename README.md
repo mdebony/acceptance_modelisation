@@ -118,7 +118,7 @@ acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
 acceptance_models = acceptance_model_creator.create_acceptance_map_per_observation(obs_collection)
 ```
 
-## Zenith bined model
+## Zenith binned model
 
 It's also possible to create model binned per cos zenith. For this use the method create_acceptance_map_per_observation but with the option `zenith_binning` set at True.
 The width of zenith bin could be control at the creation of the object with the parameter `initial_cos_zenith_binning`. The algorithm will then automatically rebin to larger bin in order to have in each bin at least `min_run_per_cos_zenith_bin` observation per bin.
@@ -145,6 +145,56 @@ acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
                                                       min_run_per_cos_zenith_bin=3,
                                                       initial_cos_zenith_binning=0.01)
 acceptance_models = acceptance_model_creator.create_acceptance_map_per_observation(obs_collection,
+                                                                                   zenith_binning=True,
+                                                                                   zenith_interpolation=True)
+```
+
+## Using off runs for background model
+
+It's also possible to create a model from OFF runs and to apply in on runs you want to analyse. The exclusions regions should cover potential sources both in the on and off runs. The OFF runs doesn't need to be connected.
+```python
+acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
+                                                      offset_axis_acceptance,
+                                                      exclude_regions=exclude_regions,
+                                                      oversample_map=10,
+                                                      min_run_per_cos_zenith_bin=3,
+                                                      initial_cos_zenith_binning=0.01)
+acceptance_models = acceptance_model_creator.create_acceptance_map_per_observation(obs_collection,
+                                                                                   off_observations=obs_collection_off,
+                                                                                   zenith_binning=True,
+                                                                                   zenith_interpolation=True)
+```
+
+## Store background model for later application
+
+It could be in some case usefull to precompute a model and applying it on data later. The example below cover the case where you want to use a model per run using zenith interpolation and off runs. But it's possible to use this functionality without off runs or zenith interpolation. In the last case you just need to provide a model in a gammapy format.
+
+### Creating and storing the model
+```python
+import pickle
+acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
+                                                      offset_axis_acceptance,
+                                                      exclude_regions=exclude_regions,
+                                                      oversample_map=10,
+                                                      min_run_per_cos_zenith_bin=3,
+                                                      initial_cos_zenith_binning=0.01)
+base_model = acceptance_model_creator.create_model_cos_zenith_binned(obs_collection_off)
+
+with open('my_bkg_model.pck', mode='wb') as f:
+    pickle.dump(base_model, f)
+```
+
+### Loading and applying the model
+```python
+import pickle
+with open('my_bkg_model.pck', mode='rb') as f:
+    base_model = pickle.load(f)
+    
+acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
+                                                      offset_axis_acceptance,
+                                                      exclude_regions=exclude_regions)
+acceptance_models = acceptance_model_creator.create_acceptance_map_per_observation(obs_collection,
+                                                                                   base_model=base_model,
                                                                                    zenith_binning=True,
                                                                                    zenith_interpolation=True)
 ```
