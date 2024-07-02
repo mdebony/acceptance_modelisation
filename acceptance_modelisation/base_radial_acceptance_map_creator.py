@@ -22,8 +22,7 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  initial_cos_zenith_binning: float = 0.01,
                  max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
                  max_fraction_pixel_rotation_fov: float = 0.5,
-                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
-                 verbose: bool = False) -> None:
+                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s) -> None:
         """
         Create the class for calculating radial acceptance model
 
@@ -49,8 +48,6 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
         time_resolution_rotation_fov : astropy.unit.Quantity, optional
             Time resolution to use for the computation of the rotation of the FoV
-        verbose : bool, optional
-            If True, print informations related to cos zenith binning
         """
 
         # If no exclusion region, default it as an empty list
@@ -68,7 +65,7 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
         super().__init__(energy_axis, max_offset, spatial_resolution, exclude_regions,
                          cos_zenith_binning_method, cos_zenith_binning_parameter_value,
                          initial_cos_zenith_binning, max_angular_separation_wobble, max_fraction_pixel_rotation_fov,
-                         time_resolution_rotation_fov,verbose)
+                         time_resolution_rotation_fov)
 
     def create_acceptance_map(self, observations: Observations) -> Background2D:
         """
