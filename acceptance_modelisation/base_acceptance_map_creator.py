@@ -21,6 +21,8 @@ from scipy.interpolate import interp1d
 
 from .toolbox import compute_rotation_speed_fov, get_unique_wobble_pointings
 
+logger = logging.getLogger(__name__)
+
 
 class BaseAcceptanceMapCreator(ABC):
 
@@ -34,8 +36,7 @@ class BaseAcceptanceMapCreator(ABC):
                  initial_cos_zenith_binning: float = 0.01,
                  max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
                  max_fraction_pixel_rotation_fov: float = 0.5,
-                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
-                 verbose: bool = False) -> None:
+                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s) -> None:
         """
         Create the class for calculating radial acceptance model.
 
@@ -61,8 +62,6 @@ class BaseAcceptanceMapCreator(ABC):
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
         time_resolution_rotation_fov : astropy.units.Quantity, optional
             Time resolution to use for the computation of the rotation of the FoV
-        verbose : bool, optional
-            If True, print informations related to cos zenith binning
         """
 
         # If no exclusion region, default it as an empty list
@@ -77,7 +76,6 @@ class BaseAcceptanceMapCreator(ABC):
         self.cos_zenith_binning_parameter_value = cos_zenith_binning_parameter_value
         self.initial_cos_zenith_binning = initial_cos_zenith_binning
         self.max_angular_separation_wobble = max_angular_separation_wobble
-        self.verbose = verbose
 
         # Calculate map parameter
         self.n_bins_map = 2 * int(np.rint((self.max_offset / spatial_resolution).to(u.dimensionless_unscaled)))
@@ -85,7 +83,7 @@ class BaseAcceptanceMapCreator(ABC):
         self.center_map = SkyCoord(ra=0. * u.deg, dec=0. * u.deg, frame='icrs')
         self.geom = WcsGeom.create(skydir=self.center_map, npix=(self.n_bins_map, self.n_bins_map),
                                    binsz=self.spatial_bin_size, frame="icrs", axes=[self.energy_axis])
-        logging.info(
+        logger.info(
             'Computation will be made with a bin size of {:.3f} arcmin'.format(
                 self.spatial_bin_size.to_value(u.arcmin)))
 
@@ -403,7 +401,7 @@ class BaseAcceptanceMapCreator(ABC):
             modified_observation.bkg = acceptance_map[id_observation]
 
             # Fit the background model
-            logging.info('Fit to model to run ' + str(id_observation))
+            logger.info('Fit to model to run ' + str(id_observation))
             map_obs, exclusion_mask = self._create_sky_map(modified_observation, add_bkg=True)
             maker_FoV_background = FoVBackgroundMaker(method='fit', exclusion_mask=exclusion_mask)
             map_obs = maker_FoV_background.run(map_obs)
@@ -413,10 +411,10 @@ class BaseAcceptanceMapCreator(ABC):
             norm_background = parameters[parameters['name'] == 'norm']['value'][0]
 
             if norm_background < 0.:
-                logging.error(
+                logger.error(
                     'Invalid normalisation value for run ' + str(id_observation) + ' : ' + str(norm_background))
             elif norm_background > 1.5 or norm_background < 0.5:
-                logging.warning(
+                logger.warning(
                     'High correction of the background normalisation for run ' + str(id_observation) + ' : ' + str(
                         norm_background))
 
@@ -450,7 +448,7 @@ class BaseAcceptanceMapCreator(ABC):
         try:
             i_method = methods[self.cos_zenith_binning_method]
         except KeyError:
-            logging.error(f" KeyError : {self.cos_zenith_binning_method} not a valid zenith binning method.\nValid "
+            logger.error(f" KeyError : {self.cos_zenith_binning_method} not a valid zenith binning method.\nValid "
                           f"methods are {[*methods]}")
             raise
         per_wobble = i_method < 0
@@ -537,23 +535,22 @@ class BaseAcceptanceMapCreator(ABC):
             bin_center.append(np.sum([wcos.value for wcos in weighted_cos_zenith_bin_per_obs]) / np.sum(
                 [livet.value for livet in livetime_per_obs]))
 
-        if self.verbose:
-            print("cos zenith bin edges: ", list(np.round(cos_zenith_bin, 2)))
-            print("cos zenith bin centers: ", list(np.round(bin_center, 2)))
-            print(f"observation per bin: ", list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0]))
-            print(f"livetime per bin [s]: ", list(
-                np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations)[0].astype(
-                    int)))
-            if per_wobble:
-                wobble_observations_bool_arr = [(np.array(wobble_observations.tolist()) == wobble) for wobble in
-                                                np.unique(np.array(wobble_observations))]
-                livetime_observations_and_wobble = [np.array(livetime_observations) * wobble_bool for wobble_bool in
-                                                    wobble_observations_bool_arr]
-                for i, wobble in enumerate(np.unique(np.array(wobble_observations))):
-                    print(
-                        f"{wobble} observation per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=1 * wobble_observations_bool_arr[i])[0])}")
-                    print(
-                        f"{wobble} livetime per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations_and_wobble[i])[0].astype(int))}")
+        logger.info("cos zenith bin edges: ", list(np.round(cos_zenith_bin, 2)))
+        logger.info("cos zenith bin centers: ", list(np.round(bin_center, 2)))
+        logger.info(f"observation per bin: ", list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0]))
+        logger.info(f"livetime per bin [s]: ", list(
+            np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations)[0].astype(
+                int)))
+        if per_wobble:
+            wobble_observations_bool_arr = [(np.array(wobble_observations.tolist()) == wobble) for wobble in
+                                            np.unique(np.array(wobble_observations))]
+            livetime_observations_and_wobble = [np.array(livetime_observations) * wobble_bool for wobble_bool in
+                                                wobble_observations_bool_arr]
+            for i, wobble in enumerate(np.unique(np.array(wobble_observations))):
+                logger.info(
+                    f"{wobble} observation per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=1 * wobble_observations_bool_arr[i])[0])}")
+                logger.info(
+                    f"{wobble} livetime per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations_and_wobble[i])[0].astype(int))}")
 
         # Create the dict for output of the function
         dict_binned_model = {}
@@ -591,7 +588,7 @@ class BaseAcceptanceMapCreator(ABC):
         # Find the closest model for each observation and associate it to each observation
         acceptance_map = {}
         if len(cos_zenith_model) <= 1:
-            logging.warning('Only one zenith bin, zenith binning deactivated')
+            logger.warning('Only one zenith bin, zenith binning deactivated')
         for obs in observations:
             cos_zenith_observation = np.cos(obs.get_pointing_altaz(obs.tmid).zen)
             key_closest_model = key_model[(np.abs(cos_zenith_model - cos_zenith_observation)).argmin()]
@@ -627,7 +624,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         acceptance_map = {}
         if len(binned_model) <= 1:
-            logging.warning('Only one zenith bin, zenith interpolation deactivated')
+            logger.warning('Only one zenith bin, zenith interpolation deactivated')
             for obs in observations:
                 acceptance_map[obs.obs_id] = binned_model[0]
         else:

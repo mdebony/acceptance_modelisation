@@ -7,6 +7,8 @@ from copy import deepcopy
 import logging
 import numpy as np
 
+logger = logging.getLogger(__name__)
+
 def compute_rotation_speed_fov(time_evaluation: Time,
                                pointing_sky: SkyCoord,
                                observatory_earth_location: EarthLocation) -> u.Quantity:
@@ -76,7 +78,7 @@ def get_unique_wobble_pointings(observations: Observations, max_angular_separati
         ra_observations = all_ra_observations[mask_all_remaining]
         dec_observations = all_dec_observations[mask_all_remaining]
 
-    logging.info(f"{len(wobbles_dict)} wobbles were found:")
+    logger.info(f"{len(wobbles_dict)} wobbles were found:")
     for key, value in wobbles_dict.items():
-        logging.info(f"{key}: [{value[0].round(2)}, {value[1].round(2)}]")
+        logger.info(f"{key}: [{value[0].round(2)}, {value[1].round(2)}]")
     return wobbles

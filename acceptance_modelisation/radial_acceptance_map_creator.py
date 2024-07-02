@@ -21,8 +21,7 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
                  initial_cos_zenith_binning: float = 0.01,
                  max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
                  max_fraction_pixel_rotation_fov: float = 0.5,
-                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
-                 verbose: bool = False) -> None:
+                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s) -> None:
         """
         Create the class for calculating radial acceptance model
         This class should be use when strict 2D model is good enough
@@ -49,8 +48,6 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
         time_resolution_rotation_fov : astropy.unit.Quantity, optional
             Time resolution to use for the computation of the rotation of the FoV
-        verbose : bool, optional
-            If True, print informations related to cos zenith binning
         """
 
         # Initiate upper instance
@@ -63,8 +60,7 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
                          initial_cos_zenith_binning=initial_cos_zenith_binning,
                          max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
                          max_angular_separation_wobble=max_angular_separation_wobble,
-                         time_resolution_rotation_fov=time_resolution_rotation_fov,
-                         verbose=verbose)
+                         time_resolution_rotation_fov=time_resolution_rotation_fov)
 
     def _create_base_computation_map(self, observations: Observation) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Unit]:
         """
@@ -111,4 +107,3 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
             livetime += obs.observation_live_time_duration
 
         return count_map_background, exp_map_background, exp_map_background_total, livetime
-
