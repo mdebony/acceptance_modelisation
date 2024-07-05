@@ -21,8 +21,9 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  cos_zenith_binning_parameter_value: int = 3600,
                  initial_cos_zenith_binning: float = 0.01,
                  max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
+                 zenith_binning_run_splitting: bool = False,
                  max_fraction_pixel_rotation_fov: float = 0.5,
-                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s) -> None:
+                 time_resolution_run_splitting: u.Quantity = 0.1 * u.s) -> None:
         """
         Create the class for calculating radial acceptance model
 
@@ -44,10 +45,12 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
             Initial bin size for cos zenith binning
         max_angular_separation_wobble : u.Quantity, optional
             The maximum angular separation between identified wobbles, in degrees
+        zenith_binning_run_splitting : flaot, optional
+            If true, will split each run to match zenith binning for the base model computation, no effect on the interpolation phase itself, could be compute expensive
         max_fraction_pixel_rotation_fov : float, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
-        time_resolution_rotation_fov : astropy.unit.Quantity, optional
-            Time resolution to use for the computation of the rotation of the FoV
+        time_resolution_run_splitting : astropy.units.Quantity, optional
+            Time resolution to use for the computation of the rotation of the FoV and cut as function of the zenith bins
         """
 
         # If no exclusion region, default it as an empty list
@@ -62,10 +65,17 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
         max_offset = np.max(self.offset_axis.edges)
 
         # Initiate upper instance
-        super().__init__(energy_axis, max_offset, spatial_resolution, exclude_regions,
-                         cos_zenith_binning_method, cos_zenith_binning_parameter_value,
-                         initial_cos_zenith_binning, max_angular_separation_wobble, max_fraction_pixel_rotation_fov,
-                         time_resolution_rotation_fov)
+        super().__init__(energy_axis=energy_axis,
+                         max_offset=max_offset,
+                         spatial_resolution=spatial_resolution,
+                         exclude_regions=exclude_regions,
+                         cos_zenith_binning_method=cos_zenith_binning_method,
+                         cos_zenith_binning_parameter_value=cos_zenith_binning_parameter_value,
+                         initial_cos_zenith_binning=initial_cos_zenith_binning,
+                         max_angular_separation_wobble=max_angular_separation_wobble,
+                         max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
+                         zenith_binning_run_splitting=zenith_binning_run_splitting,
+                         time_resolution_run_splitting=time_resolution_run_splitting)
 
     def create_acceptance_map(self, observations: Observations) -> Background2D:
         """
