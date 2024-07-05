@@ -378,34 +378,34 @@ class BaseAcceptanceMapCreator(ABC):
             if isinstance(base_model, BackgroundIRF):
                 if only_zenith_model:
                     error_message = 'Invalid base model format, please provide a dict of BackgroundIRF'
-                    logging.error(error_message)
+                    logger.error(error_message)
                     raise BackgroundModelFormatException(error_message)
             elif isinstance(base_model, dict):
                 if only_raw_model:
                     error_message = 'Invalid base model format, please provide a BackgroundIRF'
-                    logging.error(error_message)
+                    logger.error(error_message)
                     raise BackgroundModelFormatException(error_message)
                 for k in base_model.keys():
                     if not isinstance(k, (np.floating, float)):
                         error_message = 'Invalid type for keys in the dictionary, should be float value, ' + str(
                             type(k)) + ' provided'
-                        logging.error(error_message)
+                        logger.error(error_message)
                         raise BackgroundModelFormatException(error_message)
                     elif k > 90.0 or k < 0.0:
                         error_message = ('Invalid value for keys in the dictionary, the should represent the zenith of '
                                          'the model in degree with a value between 0 and 90, ') + str(
                             k) + ' provided'
-                        logging.error(error_message)
+                        logger.error(error_message)
                         raise BackgroundModelFormatException(error_message)
                     if not isinstance(base_model[k], BackgroundIRF):
                         error_message = 'Invalid base model format, each entry should be a BackgroundIRF, ' + str(
                             type(base_model[k])) + ' provided'
-                        logging.error(error_message)
+                        logger.error(error_message)
                         raise BackgroundModelFormatException(error_message)
             else:
                 error_message = ('Invalid base model format, please provide either a BackgroundIRF or a dict of '
                                  'BackgroundIRF, ') + str(type(base_model)) + ' provided'
-                logging.error(error_message)
+                logger.error(error_message)
                 raise BackgroundModelFormatException(error_message)
 
     @abstractmethod
