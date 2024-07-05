@@ -17,8 +17,10 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  offset_axis: MapAxis,
                  oversample_map: int = 10,
                  exclude_regions: Optional[List[SkyRegion]] = None,
-                 min_observation_per_cos_zenith_bin: int = 3,
+                 cos_zenith_binning_method: str = 'min_livetime',
+                 cos_zenith_binning_parameter_value: int = 3600,
                  initial_cos_zenith_binning: float = 0.01,
+                 max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
                  max_fraction_pixel_rotation_fov: float = 0.5,
                  time_resolution_rotation_fov: u.Quantity = 0.1 * u.s) -> None:
         """
@@ -34,10 +36,14 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
             Oversample in number of pixel of the spatial axis used for the calculation
         exclude_regions : list of regions.SkyRegion, optional
             Region with known or putative gamma-ray emission, will be excluded of the calculation of the acceptance map
-        min_observation_per_cos_zenith_bin : int, optional
-            Minimum number of runs per zenith bins
+        cos_zenith_binning_method : str, optional
+            The method used for cos zenith binning: 'min_livetime','min_livetime_per_wobble','min_n_observation'
+        cos_zenith_binning_parameter_value : int, optional
+            Minimum livetime (in seconds) or number of observations per zenith bins
         initial_cos_zenith_binning : float, optional
             Initial bin size for cos zenith binning
+        max_angular_separation_wobble : u.Quantity, optional
+            The maximum angular separation between identified wobbles, in degrees
         max_fraction_pixel_rotation_fov : float, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
         time_resolution_rotation_fov : astropy.unit.Quantity, optional
@@ -56,8 +62,10 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
         max_offset = np.max(self.offset_axis.edges)
 
         # Initiate upper instance
-        super().__init__(energy_axis, max_offset, spatial_resolution, exclude_regions, min_observation_per_cos_zenith_bin,
-                         initial_cos_zenith_binning, max_fraction_pixel_rotation_fov, time_resolution_rotation_fov)
+        super().__init__(energy_axis, max_offset, spatial_resolution, exclude_regions,
+                         cos_zenith_binning_method, cos_zenith_binning_parameter_value,
+                         initial_cos_zenith_binning, max_angular_separation_wobble, max_fraction_pixel_rotation_fov,
+                         time_resolution_rotation_fov)
 
     def create_acceptance_map(self, observations: Observations) -> Background2D:
         """
