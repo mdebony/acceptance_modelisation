@@ -24,7 +24,6 @@ from .toolbox import compute_rotation_speed_fov, get_unique_wobble_pointings
 logger = logging.getLogger(__name__)
 
 
-
 class BaseAcceptanceMapCreator(ABC):
 
     def __init__(self,
@@ -355,7 +354,7 @@ class BaseAcceptanceMapCreator(ABC):
         return count_map_background, exp_map_background, exp_map_background_total, livetime
 
     @staticmethod
-    def _check_base_mode(base_model, only_raw_model: bool = False, only_zenith_model: bool = False):
+    def _check_base_model(base_model, only_raw_model: bool = False, only_zenith_model: bool = False):
         """
         Method to verify format of a base model provided for computation
 
@@ -504,7 +503,7 @@ class BaseAcceptanceMapCreator(ABC):
             i_method = methods[self.cos_zenith_binning_method]
         except KeyError:
             logger.error(f" KeyError : {self.cos_zenith_binning_method} not a valid zenith binning method.\nValid "
-                          f"methods are {[*methods]}")
+                         f"methods are {[*methods]}")
             raise
         per_wobble = i_method < 0
 
@@ -617,7 +616,7 @@ class BaseAcceptanceMapCreator(ABC):
     def create_acceptance_map_cos_zenith_binned(self,
                                                 observations: Observations,
                                                 off_observations: Observations = None,
-                                                base_model: dict = None
+                                                base_model: dict[Any, BackgroundIRF] = None
                                                 ) -> dict[Any, BackgroundIRF]:
         """
         Calculate an acceptance map per run using cos zenith binning
@@ -639,7 +638,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         """
 
-        self._check_base_mode(base_model, only_zenith_model=True)
+        self._check_base_model(base_model, only_zenith_model=True)
 
         if off_observations is None:
             off_observations = observations
@@ -670,7 +669,7 @@ class BaseAcceptanceMapCreator(ABC):
     def create_acceptance_map_cos_zenith_interpolated(self,
                                                       observations: Observations,
                                                       off_observations: Observations = None,
-                                                      base_model: dict = None
+                                                      base_model: dict[Any, BackgroundIRF] = None
                                                       ) -> dict[Any, BackgroundIRF]:
         """
         Calculate an acceptance map per run using cos zenith binning and interpolation
@@ -692,7 +691,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         """
 
-        self._check_base_mode(base_model, only_zenith_model=True)
+        self._check_base_model(base_model, only_zenith_model=True)
 
         if off_observations is None:
             off_observations = observations
@@ -769,7 +768,7 @@ class BaseAcceptanceMapCreator(ABC):
             A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
         """
 
-        self._check_base_mode(base_model)
+        self._check_base_model(base_model)
 
         if off_observations is None:
             off_observations = observations
@@ -785,7 +784,7 @@ class BaseAcceptanceMapCreator(ABC):
                                                                           base_model=base_model)
         else:
             if base_model is not None:
-                self._check_base_mode(base_model, only_raw_model=True)
+                self._check_base_model(base_model, only_raw_model=True)
                 unique_base_acceptance_map = base_model
             else:
                 unique_base_acceptance_map = self.create_acceptance_map(off_observations)
