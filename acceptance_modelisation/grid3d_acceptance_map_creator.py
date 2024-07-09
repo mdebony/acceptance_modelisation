@@ -31,8 +31,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  method='stack',
                  fit_fnc='gaussian2d',
                  fit_seeds=None,
-                 fit_bounds=None,
-                 verbose: bool = False) -> None:
+                 fit_bounds=None) -> None:
         """
         Create the class for calculating 3D grid acceptance model
 
@@ -67,8 +66,6 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
             Seeds of the parameters of the function to fit. Normalisation parameter is ignored if given.
         fit_bounds: dict, can optionally be None if using a built-in function
             Bounds of the parameters of the function to fit. Normalisation parameter is ignored if given.
-        verbose : bool, optional
-            If True, print informations related to cos zenith binning
         """
 
         # If no exclusion region, default it as an empty list
@@ -95,7 +92,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         super().__init__(energy_axis, max_offset, spatial_resolution, exclude_regions,
                          cos_zenith_binning_method, cos_zenith_binning_parameter_value,
                          initial_cos_zenith_binning, max_angular_separation_wobble, max_fraction_pixel_rotation_fov,
-                         time_resolution_rotation_fov, verbose)
+                         time_resolution_rotation_fov)
 
     def fit_background(self, count_map, exp_map_total, exp_map):
         centers = self.offset_axis.center.to_value(u.deg)
