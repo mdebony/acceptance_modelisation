@@ -326,7 +326,7 @@ class BaseAcceptanceMapCreator(ABC):
                 # Evaluate the average exclusion mask in camera frame
                 # by evaluating it on time intervals short compared to the field of view rotation
                 exclusion_mask = np.zeros(count_map_obs.counts.data.shape[1:])
-                time_interval = self._compute_time_intervals_based_on_zenith_bin(obs)
+                time_interval = self._compute_time_intervals_based_on_fov_rotation(obs)
                 for i in range(len(time_interval) - 1):
                     # Compute the exclusion region in camera frame for the average time
                     dtime = time_interval[i + 1] - time_interval[i]
