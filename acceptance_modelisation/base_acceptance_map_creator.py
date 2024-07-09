@@ -459,7 +459,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         # Split the time interval to transition between zenith bin
         id_bin = np.digitize(zenith_values, edge_zenith_bin)
-        bin_transition = np.argwhere(id_bin[2:] != id_bin[1:-1])
+        bin_transition = id_bin[2:] != id_bin[1:-1]
         time_interval = Time([obs.tstart, ] + [time_axis[1:-1][bin_transition], ] + [obs.tstop, ])
 
         return time_interval
@@ -503,7 +503,10 @@ class BaseAcceptanceMapCreator(ABC):
                 logger.warning('Using zenith bin and run splitting at the same time is not recommanded and could lead to poor model. We recommand switching to a binning requirement based on livetime.')
             compute_observations = Observations()
             for obs in observations:
-                compute_observations.append(self._compute_time_intervals_based_on_zenith_bin(obs, zenith_bin))
+                time_interval = self._compute_time_intervals_based_on_zenith_bin(obs, zenith_bin)
+                for i in range(len(time_interval) - 1):
+                    compute_observations.append(obs.select_time(Time([time_interval[i], time_interval[i + 1]])))
+                compute_observations_len = len(compute_observations)
         else:
             compute_observations = observations
 
