@@ -353,8 +353,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         return count_map_background, exp_map_background, exp_map_background_total, livetime
 
-    @staticmethod
-    def _check_base_model(base_model, only_raw_model: bool = False, only_zenith_model: bool = False):
+    def _check_base_model(self, base_model, only_raw_model: bool = False, only_zenith_model: bool = False):
         """
         Method to verify format of a base model provided for computation
 
