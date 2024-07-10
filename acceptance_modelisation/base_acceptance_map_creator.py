@@ -20,6 +20,7 @@ from scipy.integrate import cumulative_trapezoid
 from scipy.interpolate import interp1d
 
 from .toolbox import compute_rotation_speed_fov, get_unique_wobble_pointings
+from .exception import NotEnoughDataZenithBinning
 
 logger = logging.getLogger(__name__)
 
@@ -510,6 +511,11 @@ class BaseAcceptanceMapCreator(ABC):
                 else:
                     zenith_selected[-1] = n + 1
                     i = n
+        if len(zenith_selected) < 3:
+            logger.error('There are not enough data to form at least two zenith bin following the provided requirements')
+            raise NotEnoughDataZenithBinning('There are not enough data to form at least two zenith bin following the provided requirements')
+
+        # Keep only the grouped bin
         cos_zenith_bin = cos_zenith_bin[zenith_selected]
 
         # Associate each observation to the correct bin
