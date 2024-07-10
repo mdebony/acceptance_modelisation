@@ -535,12 +535,11 @@ class BaseAcceptanceMapCreator(ABC):
             bin_center.append(np.sum([wcos.value for wcos in weighted_cos_zenith_bin_per_obs]) / np.sum(
                 [livet.value for livet in livetime_per_obs]))
 
-        logger.info("cos zenith bin edges: ", list(np.round(cos_zenith_bin, 2)))
-        logger.info("cos zenith bin centers: ", list(np.round(bin_center, 2)))
-        logger.info(f"observation per bin: ", list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0]))
-        logger.info(f"livetime per bin [s]: ", list(
-            np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations)[0].astype(
-                int)))
+        logger.info(f"cos zenith bin edges: {list(np.round(cos_zenith_bin, 2))}")
+        logger.info(f"cos zenith bin centers: {list(np.round(bin_center, 2))}")
+        logger.info(f"observation per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0])}")
+        logger.info(f"livetime per bin [s]: " +
+                     f"{list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations)[0].astype(int))}")
         if per_wobble:
             wobble_observations_bool_arr = [(np.array(wobble_observations.tolist()) == wobble) for wobble in
                                             np.unique(np.array(wobble_observations))]
