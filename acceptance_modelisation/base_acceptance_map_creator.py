@@ -502,14 +502,13 @@ class BaseAcceptanceMapCreator(ABC):
                     # Reduce the cumulative sum by the value at the selected index for the next iteration
                     cumsum_variable[wobble] -= cumsum_variable[wobble][i]
             else:
-                i += 1
                 # The zenith bin creation criteria is not fulfilled, the last bin edge is set to the end of the
                 # cos(zenith) array
                 if i == 0:
                     zenith_selected.append(n + 1)
                 else:
                     zenith_selected[-1] = n + 1
-                    i = n
+                i = n
         cos_zenith_bin = cos_zenith_bin[zenith_selected]
 
         # Associate each observation to the correct bin
