@@ -24,7 +24,7 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  max_fraction_pixel_rotation_fov: float = 0.5,
                  time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
                  use_mini_irf_computation: bool = False,
-                 mini_irf_computation_resolution: u.Quantity = 1. * u.min) -> None:
+                 mini_irf_time_resolution: u.Quantity = 1. * u.min) -> None:
         """
         Create the class for calculating radial acceptance model
 
@@ -53,7 +53,7 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
         use_mini_irf_computation : bool, optional
             If true, during zenith interpolation and binning will compute first mini irf for each part of the run before averaging them.
             Should improve the accuracy of the model, especially at high zenith angle. Actiate it could singificantly increase computation time.
-        mini_irf_computation_resolution : astropy.units.Quantity, optional
+        mini_irf_time_resolution : astropy.units.Quantity, optional
             Time resolution to use for mini irf used for computation of the final background model
         """
 
@@ -80,7 +80,7 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
                          max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
                          time_resolution_rotation_fov=time_resolution_rotation_fov,
                          use_mini_irf_computation=use_mini_irf_computation,
-                         mini_irf_computation_resolution=mini_irf_computation_resolution)
+                         mini_irf_time_resolution=mini_irf_time_resolution)
 
     def create_acceptance_map(self, observations: Observations) -> Background2D:
         """

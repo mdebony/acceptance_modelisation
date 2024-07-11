@@ -19,7 +19,7 @@ from scipy.integrate import cumulative_trapezoid
 from scipy.interpolate import interp1d
 
 from .exception import BackgroundModelFormatException
-from .toolbox import compute_rotation_speed_fov, get_unique_wobble_pointings
+from .toolbox import compute_rotation_speed_fov, get_unique_wobble_pointings, get_time_mini_irf, generate_irf_from_mini_irf
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class BaseAcceptanceMapCreator(ABC):
                  max_fraction_pixel_rotation_fov: float = 0.5,
                  time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
                  use_mini_irf_computation: bool = False,
-                 mini_irf_computation_resolution: u.Quantity = 1. * u.min) -> None:
+                 mini_irf_time_resolution: u.Quantity = 1. * u.min) -> None:
         """
         Create the class for calculating radial acceptance model.
 
@@ -67,7 +67,7 @@ class BaseAcceptanceMapCreator(ABC):
         use_mini_irf_computation : bool, optional
             If true, during zenith interpolation and binning will compute first mini irf for each part of the run before averaging them.
             Should improve the accuracy of the model, especially at high zenith angle. Actiate it could singificantly increase computation time.
-        mini_irf_computation_resolution : astropy.units.Quantity, optional
+        mini_irf_time_resolution : astropy.units.Quantity, optional
             Time resolution to use for mini irf used for computation of the final background model
         """
 
@@ -100,7 +100,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         # Store mini irf computation parameters
         self.use_mini_irf_computation = use_mini_irf_computation
-        self.mini_irf_computation_resolution = mini_irf_computation_resolution
+        self.mini_irf_time_resolution = mini_irf_time_resolution
 
     @staticmethod
     def _transform_obs_to_camera_frame(obs: Observation) -> Observation:
@@ -670,9 +670,32 @@ class BaseAcceptanceMapCreator(ABC):
         if len(cos_zenith_model) <= 1:
             logger.warning('Only one zenith bin, zenith binning deactivated')
         for obs in observations:
-            cos_zenith_observation = np.cos(obs.get_pointing_altaz(obs.tmid).zen)
-            key_closest_model = key_model[(np.abs(cos_zenith_model - cos_zenith_observation)).argmin()]
-            acceptance_map[obs.obs_id] = dict_binned_model[key_closest_model]
+            if self.use_mini_irf_computation:
+                evaluation_time, observation_time = get_time_mini_irf(obs, self.mini_irf_time_resolution)
+
+                data_obs_all = np.zeros(tuple([len(evaluation_time), ] + list(dict_binned_model[key_model[0]].data.shape))) * dict_binned_model[key_model[0]].unit
+                for i in range(len(evaluation_time)):
+                    cos_zenith_observation = np.cos(obs.get_pointing_altaz(evaluation_time[i]).zen)
+                    key_closest_model = key_model[(np.abs(cos_zenith_model - cos_zenith_observation)).argmin()]
+                    selected_model_bin = dict_binned_model[key_closest_model]
+                    data_obs_all[i] = selected_model_bin.data * selected_model_bin.unit
+
+                data_obs = generate_irf_from_mini_irf(data_obs_all, observation_time)
+
+                if type(dict_binned_model[key_model[0]]) is Background2D:
+                    acceptance_map[obs.obs_id] = Background2D(axes=dict_binned_model[key_model[0]].axes,
+                                                              data=data_obs)
+                elif type(dict_binned_model[key_model[0]]) is Background3D:
+                    acceptance_map[obs.obs_id] = Background3D(axes=dict_binned_model[key_model[0]].axes,
+                                                              data=data_obs)
+                else:
+                    raise Exception('Unknown background format')
+
+            else:
+                cos_zenith_observation = np.cos(obs.get_pointing_altaz(obs.tmid).zen)
+                key_closest_model = key_model[(np.abs(cos_zenith_model - cos_zenith_observation)).argmin()]
+                selected_model = dict_binned_model[key_closest_model]
+                acceptance_map[obs.obs_id] = selected_model
 
         return acceptance_map
 
@@ -732,8 +755,23 @@ class BaseAcceptanceMapCreator(ABC):
                                    axis=0,
                                    fill_value='extrapolate')
             for obs in observations:
-                data_obs = (10. ** interp_func(np.cos(obs.get_pointing_altaz(obs.tmid).zen)))
+                if self.use_mini_irf_computation:
+                    evaluation_time, observation_time = get_time_mini_irf(obs, self.mini_irf_time_resolution)
+
+                    data_obs_all_log = np.zeros(tuple([len(evaluation_time), ] + list(binned_model[0].data.shape)))
+                    for i in range(len(evaluation_time)):
+                        data_obs_bin_log = interp_func(np.cos(obs.get_pointing_altaz(evaluation_time[i]).zen))
+                        data_obs_all_log[i, :, :] = data_obs_bin_log
+
+                    data_obs_log = generate_irf_from_mini_irf(data_obs_all_log, observation_time)
+                    data_obs = 10 ** data_obs_log
+
+                else:
+                    data_obs = (10. ** interp_func(np.cos(obs.get_pointing_altaz(obs.tmid).zen)))
+
+                # Remove values due to interpolation artefact
                 data_obs[data_obs < 100 * np.finfo(np.float64).tiny] = 0.
+
                 if type(binned_model[0]) is Background2D:
                     acceptance_map[obs.obs_id] = Background2D(axes=binned_model[0].axes,
                                                               data=data_obs * data_cube.unit)

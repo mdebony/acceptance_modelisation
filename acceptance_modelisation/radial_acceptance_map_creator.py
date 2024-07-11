@@ -23,7 +23,7 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
                  max_fraction_pixel_rotation_fov: float = 0.5,
                  time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
                  use_mini_irf_computation: bool = False,
-                 mini_irf_computation_resolution: u.Quantity = 1. * u.min) -> None:
+                 mini_irf_time_resolution: u.Quantity = 1. * u.min) -> None:
         """
         Create the class for calculating radial acceptance model
         This class should be use when strict 2D model is good enough
@@ -53,7 +53,7 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
         use_mini_irf_computation : bool, optional
             If true, during zenith interpolation and binning will compute first mini irf for each part of the run before averaging them.
             Should improve the accuracy of the model, especially at high zenith angle. Actiate it could singificantly increase computation time.
-        mini_irf_computation_resolution : astropy.units.Quantity, optional
+        mini_irf_time_resolution : astropy.units.Quantity, optional
             Time resolution to use for mini irf used for computation of the final background model
         """
 
@@ -69,7 +69,7 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
                          max_angular_separation_wobble=max_angular_separation_wobble,
                          time_resolution_rotation_fov=time_resolution_rotation_fov,
                          use_mini_irf_computation=use_mini_irf_computation,
-                         mini_irf_computation_resolution=mini_irf_computation_resolution)
+                         mini_irf_time_resolution=mini_irf_time_resolution)
 
     def _create_base_computation_map(self, observations: Observation) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Unit]:
         """
