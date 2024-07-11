@@ -108,7 +108,7 @@ def get_time_mini_irf(observation: Observation, mini_irf_time_resolution: u.Quan
     total_observation_duration = observation.tstop - observation.tstart
     nb_bin = int(np.ceil((total_observation_duration / mini_irf_time_resolution).to_value(u.dimensionless_unscaled)))
     bin_duration = total_observation_duration / nb_bin
-    evaluation_time = np.zeros(nb_bin) * mini_irf_time_resolution.unit
+    evaluation_time = Time(np.zeros(nb_bin), format='unix')
     observation_time = np.zeros(nb_bin) * mini_irf_time_resolution.unit
     for i in range(nb_bin):
         evaluation_time[i] = observation.tstart + (i + 0.5) * bin_duration
@@ -138,10 +138,11 @@ def generate_irf_from_mini_irf(data_cube: np.array, observation_time: u.Quantity
     scale_factor_per_bin = (observation_time / np.sum(observation_time)).to_value(u.dimensionless_unscaled)
 
     # Reshape the scale factor in order to be able to multiply it to the data cube
-    shape_data_cube = data_cube.shape
+    shape_data_cube = list(data_cube.shape)
     for i in range(len(shape_data_cube)):
         if i != 0:
             shape_data_cube[i] = 1
+    shape_data_cube = tuple(shape_data_cube)
     scale_factor_per_bin_reshaped = scale_factor_per_bin.reshape(shape_data_cube)
 
     # Compute the weighted average of all mini irfs

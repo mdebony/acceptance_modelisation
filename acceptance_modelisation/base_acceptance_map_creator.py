@@ -750,8 +750,9 @@ class BaseAcceptanceMapCreator(ABC):
             data_cube = np.zeros(tuple([len(binned_model), ] + list(binned_model[0].data.shape))) * binned_model[0].unit
             for i in range(len(binned_model)):
                 data_cube[i] = binned_model[i].data * binned_model[i].unit
+            threshold_value = np.finfo(np.float64).tiny
             interp_func = interp1d(x=np.array(cos_zenith_model),
-                                   y=np.log10(data_cube.value + np.finfo(np.float64).tiny),
+                                   y=np.log10(data_cube.value + threshold_value),
                                    axis=0,
                                    fill_value='extrapolate')
             for obs in observations:
@@ -770,7 +771,7 @@ class BaseAcceptanceMapCreator(ABC):
                     data_obs = (10. ** interp_func(np.cos(obs.get_pointing_altaz(obs.tmid).zen)))
 
                 # Remove values due to interpolation artefact
-                data_obs[data_obs < 100 * np.finfo(np.float64).tiny] = 0.
+                data_obs[data_obs < 100 * threshold_value] = 0.
 
                 if type(binned_model[0]) is Background2D:
                     acceptance_map[obs.obs_id] = Background2D(axes=binned_model[0].axes,
