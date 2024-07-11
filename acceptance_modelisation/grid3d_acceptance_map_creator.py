@@ -28,6 +28,8 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
                  max_fraction_pixel_rotation_fov: float = 0.5,
                  time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
+                 use_mini_irf_computation: bool = False,
+                 mini_irf_computation_resolution: u.Quantity = 1. * u.min,
                  method='stack',
                  fit_fnc='gaussian2d',
                  fit_seeds=None,
@@ -66,6 +68,11 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
             Seeds of the parameters of the function to fit. Normalisation parameter is ignored if given.
         fit_bounds: dict, can optionally be None if using a built-in function
             Bounds of the parameters of the function to fit. Normalisation parameter is ignored if given.
+        use_mini_irf_computation : bool, optional
+            If true, during zenith interpolation and binning will compute first mini irf for each part of the run before averaging them.
+            Should improve the accuracy of the model, especially at high zenith angle. Actiate it could singificantly increase computation time.
+        mini_irf_computation_resolution : astropy.units.Quantity, optional
+            Time resolution to use for mini irf used for computation of the final background model
         """
 
         # If no exclusion region, default it as an empty list
@@ -89,10 +96,18 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         self.fit_bounds = fit_bounds
 
         # Initiate upper instance
-        super().__init__(energy_axis, max_offset, spatial_resolution, exclude_regions,
-                         cos_zenith_binning_method, cos_zenith_binning_parameter_value,
-                         initial_cos_zenith_binning, max_angular_separation_wobble, max_fraction_pixel_rotation_fov,
-                         time_resolution_rotation_fov)
+        super().__init__(energy_axis=energy_axis,
+                         max_offset=max_offset,
+                         spatial_resolution=spatial_resolution,
+                         exclude_regions=exclude_regions,
+                         cos_zenith_binning_method=cos_zenith_binning_method,
+                         cos_zenith_binning_parameter_value=cos_zenith_binning_parameter_value,
+                         initial_cos_zenith_binning=initial_cos_zenith_binning,
+                         max_angular_separation_wobble=max_angular_separation_wobble,
+                         max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
+                         time_resolution_rotation_fov=time_resolution_rotation_fov,
+                         use_mini_irf_computation=use_mini_irf_computation,
+                         mini_irf_computation_resolution=mini_irf_computation_resolution)
 
     def fit_background(self, count_map, exp_map_total, exp_map):
         centers = self.offset_axis.center.to_value(u.deg)

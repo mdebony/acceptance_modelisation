@@ -21,7 +21,9 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
                  initial_cos_zenith_binning: float = 0.01,
                  max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
                  max_fraction_pixel_rotation_fov: float = 0.5,
-                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s) -> None:
+                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
+                 use_mini_irf_computation: bool = False,
+                 mini_irf_computation_resolution: u.Quantity = 1. * u.min) -> None:
         """
         Create the class for calculating radial acceptance model
         This class should be use when strict 2D model is good enough
@@ -48,6 +50,11 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
         time_resolution_rotation_fov : astropy.unit.Quantity, optional
             Time resolution to use for the computation of the rotation of the FoV
+        use_mini_irf_computation : bool, optional
+            If true, during zenith interpolation and binning will compute first mini irf for each part of the run before averaging them.
+            Should improve the accuracy of the model, especially at high zenith angle. Actiate it could singificantly increase computation time.
+        mini_irf_computation_resolution : astropy.units.Quantity, optional
+            Time resolution to use for mini irf used for computation of the final background model
         """
 
         # Initiate upper instance
@@ -60,7 +67,9 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
                          initial_cos_zenith_binning=initial_cos_zenith_binning,
                          max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
                          max_angular_separation_wobble=max_angular_separation_wobble,
-                         time_resolution_rotation_fov=time_resolution_rotation_fov)
+                         time_resolution_rotation_fov=time_resolution_rotation_fov,
+                         use_mini_irf_computation=use_mini_irf_computation,
+                         mini_irf_computation_resolution=mini_irf_computation_resolution)
 
     def _create_base_computation_map(self, observations: Observation) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Unit]:
         """
