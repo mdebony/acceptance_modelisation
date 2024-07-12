@@ -5,7 +5,6 @@ from typing import Tuple, List, Optional, Union
 
 import astropy.units as u
 import numpy as np
-import scipy.interpolate
 from astropy.coordinates import SkyCoord, AltAz, SkyOffsetFrame
 from astropy.coordinates.erfa_astrom import erfa_astrom, ErfaAstromInterpolator
 from astropy.time import Time
@@ -22,7 +21,7 @@ from scipy.interpolate import interp1d
 from .bkg_collection import BackgroundCollectionZenith
 from .exception import BackgroundModelFormatException
 from .toolbox import compute_rotation_speed_fov, get_unique_wobble_pointings, get_time_mini_irf, \
-    generate_irf_from_mini_irf
+    generate_irf_from_mini_irf, compute_neighbour_condition_validation
 
 logger = logging.getLogger(__name__)
 
@@ -799,6 +798,15 @@ class BaseAcceptanceMapCreator(ABC):
             interp_bkg = interp_func(np.cos(zenith))
         else:
             raise Exception("Unknown interpolation type")
+
+        if self.activate_interpolation_cleaning:
+            count_valid_neighbour_condition_energy = compute_neighbour_condition_validation(interp_bkg, axis=0, relative_threshold=self.interpolation_cleaning_energy_relative_threshold)
+            count_valid_neighbour_condition_spatial = compute_neighbour_condition_validation(interp_bkg, axis=1, relative_threshold=self.interpolation_cleaning_spatial_relative_threshold)
+            if interp_bkg.ndim == 3:
+                count_valid_neighbour_condition_spatial += compute_neighbour_condition_validation(interp_bkg, axis=2, relative_threshold=self.interpolation_cleaning_spatial_relative_threshold)
+
+            mask_valid = count_valid_neighbour_condition_energy > 0 & count_valid_neighbour_condition_spatial > 1
+            interp_bkg[~mask_valid] = 0.
 
         return interp_bkg
 

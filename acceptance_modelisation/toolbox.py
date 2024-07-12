@@ -149,3 +149,48 @@ def generate_irf_from_mini_irf(data_cube: np.array, observation_time: u.Quantity
     data_cube_final = np.sum(data_cube * scale_factor_per_bin_reshaped, axis=0)
 
     return data_cube_final
+
+
+def compute_neighbour_condition_validation(a, axis, relative_threshold):
+    """
+        For each element of the array, will test the number of neighbour value on the given axis that are within the relative range provided
+
+        Parameters
+        ----------
+        a : numpy.array
+            The data block on which perform the test
+        axis : int
+            The axis on which the calculation will be performed
+        relative_threshold: float
+            The maximum ratio between neighbour value authorized
+
+        Returns
+        -------
+        interp_bkg : numpy.array
+            The object that could be call directly for performing the interpolation
+    """
+
+    # Create results table
+    count_neighbour_condition_valid = np.zeros(a.shape, dtype=np.int8)
+
+    # Define the slice to access array for computation
+    slice_down = [slice(None)] * a.ndim
+    slice_up = [slice(None)] * a.ndim
+    slice_down[axis] = slice(None, -1)
+    slice_up[axis] = slice(1, None)
+    slice_down = tuple(slice_down)
+    slice_up = tuple(slice_up)
+
+    # Compute the relative difference
+    relative_difference_up = np.abs(a[slice_up] - a[slice_down]) / a[slice_down]
+    relative_difference_down = np.abs(a[slice_up] - a[slice_down]) / a[slice_up]
+
+    # Compute if neighbour condition is validated for up and down
+    neighbour_condition_up = relative_difference_up > relative_threshold & relative_difference_up < 1./relative_threshold
+    neighbour_condition_down = relative_difference_down > relative_threshold & relative_difference_down < 1./relative_threshold
+
+    # Compute for each case the number of time the condition is valid
+    count_neighbour_condition_valid[slice_down] += neighbour_condition_up.astype(np.int8)
+    count_neighbour_condition_valid[slice_up] += neighbour_condition_down.astype(np.int8)
+
+    return count_neighbour_condition_valid
