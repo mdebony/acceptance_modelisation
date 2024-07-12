@@ -26,7 +26,7 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
                  use_mini_irf_computation: bool = False,
                  mini_irf_time_resolution: u.Quantity = 1. * u.min,
                  interpolation_type: str = 'log',
-                 activate_interpolation_cleaning: bool = True,
+                 activate_interpolation_cleaning: bool = False,
                  interpolation_cleaning_energy_relative_threshold: float = 1e-2,
                  interpolation_cleaning_spatial_relative_threshold: float = 1e-1) -> None:
         """
