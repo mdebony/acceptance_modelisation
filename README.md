@@ -173,26 +173,6 @@ acceptance_models = acceptance_model_creator.create_acceptance_map_per_observati
 
 It could be in some case usefull to precompute a model and applying it on data later. The example below cover the case where you want to use a model per run using zenith interpolation and off runs. But it's possible to use this functionality without off runs or zenith interpolation. In the last case you just need to provide a model in a gammapy format.
 
-## Compute background model with a higher time resolution than the observation run
-
-If the background evolve quickly, like at high zenith angle, you could compute in the case of zenith binned or interpolated background the model at a smaller time scale than the observation run. The background model for the run will then correspond to the average of all the model computed for each part of the run.
-It should improve accuracy of the model at the expanse of a larger compute time.
-For this you need to set `use_mini_irf_computation = True` and you could control the time resolution used for computation with the parameter `mini_irf_time_resolution`.
-
-```python
-acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
-                                                      offset_axis_acceptance,
-                                                      exclude_regions=exclude_regions,
-                                                      oversample_map=10,
-                                                      min_run_per_cos_zenith_bin=3,
-                                                      initial_cos_zenith_binning=0.01,
-                                                      use_mini_irf_computation = True,
-                                                      mini_irf_time_resolution = 1. * u.min)
-acceptance_models = acceptance_model_creator.create_acceptance_map_per_observation(obs_collection,
-                                                                                   zenith_binning=True,
-                                                                                   zenith_interpolation=True)
-```
-
 ### Creating and storing the model
 ```python
 import pickle
@@ -219,6 +199,26 @@ acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
                                                       exclude_regions=exclude_regions)
 acceptance_models = acceptance_model_creator.create_acceptance_map_per_observation(obs_collection,
                                                                                    base_model=base_model,
+                                                                                   zenith_binning=True,
+                                                                                   zenith_interpolation=True)
+```
+
+## Compute background model with a higher time resolution than the observation run
+
+If the background evolve quickly, like at high zenith angle, you could compute in the case of zenith binned or interpolated background the model at a smaller time scale than the observation run. The background model for the run will then correspond to the average of all the model computed for each part of the run.
+It should improve accuracy of the model at the expanse of a larger compute time.
+For this you need to set `use_mini_irf_computation = True` and you could control the time resolution used for computation with the parameter `mini_irf_time_resolution`.
+
+```python
+acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
+                                                      offset_axis_acceptance,
+                                                      exclude_regions=exclude_regions,
+                                                      oversample_map=10,
+                                                      min_run_per_cos_zenith_bin=3,
+                                                      initial_cos_zenith_binning=0.01,
+                                                      use_mini_irf_computation = True,
+                                                      mini_irf_time_resolution = 1. * u.min)
+acceptance_models = acceptance_model_creator.create_acceptance_map_per_observation(obs_collection,
                                                                                    zenith_binning=True,
                                                                                    zenith_interpolation=True)
 ```
