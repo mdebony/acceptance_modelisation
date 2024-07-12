@@ -759,19 +759,17 @@ class BaseAcceptanceMapCreator(ABC):
                 if self.use_mini_irf_computation:
                     evaluation_time, observation_time = get_time_mini_irf(obs, self.mini_irf_time_resolution)
 
-                    data_obs_all_log = np.zeros(tuple([len(evaluation_time), ] + list(binned_model[0].data.shape)))
+                    data_obs_all = np.zeros(tuple([len(evaluation_time), ] + list(binned_model[0].data.shape)))
                     for i in range(len(evaluation_time)):
-                        data_obs_bin_log = interp_func(np.cos(obs.get_pointing_altaz(evaluation_time[i]).zen))
-                        data_obs_all_log[i, :, :] = data_obs_bin_log
+                        data_obs_bin = (10. ** interp_func(np.cos(obs.get_pointing_altaz(evaluation_time[i]).zen)))
+                        data_obs_bin[data_obs_bin < 100 * threshold_value] = 0.
+                        data_obs_all[i, :, :] = data_obs_bin
 
-                    data_obs_log = generate_irf_from_mini_irf(data_obs_all_log, observation_time)
-                    data_obs = 10 ** data_obs_log
+                    data_obs = generate_irf_from_mini_irf(data_obs_all, observation_time)
 
                 else:
                     data_obs = (10. ** interp_func(np.cos(obs.get_pointing_altaz(obs.tmid).zen)))
-
-                # Remove values due to interpolation artefact
-                data_obs[data_obs < 100 * threshold_value] = 0.
+                    data_obs[data_obs < 100 * threshold_value] = 0.
 
                 if type(binned_model[0]) is Background2D:
                     acceptance_map[obs.obs_id] = Background2D(axes=binned_model[0].axes,
