@@ -34,7 +34,11 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  method='stack',
                  fit_fnc='gaussian2d',
                  fit_seeds=None,
-                 fit_bounds=None) -> None:
+                 fit_bounds=None,
+                 interpolation_type: str = 'log',
+                 activate_interpolation_cleaning: bool = True,
+                 interpolation_cleaning_energy_relative_threshold: float = 1e-2,
+                 interpolation_cleaning_spatial_relative_threshold: float = 1e-1) -> None:
         """
         Create the class for calculating 3D grid acceptance model
 
@@ -78,6 +82,14 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
             Should improve the accuracy of the model, especially at high zenith angle.
         mini_irf_time_resolution : astropy.units.Quantity, optional
             Time resolution to use for mini irf used for computation of the final background model
+        interpolation_type: str, optional
+            Select the type of interpolation to be used, could be either log or linear, log tend to provided better results be could more easily create artefact that will cause issue
+        activate_interpolation_cleaning: bool, optional
+            If true, will activate the cleaning step after interpolation, it should help to eliminate artefact caused by interpolation
+        interpolation_cleaning_energy_relative_threshold: float, optional
+            To be considered value, the bin in energy need at least one adjacent bin with a relative difference within this range
+        interpolation_cleaning_spatial_relative_threshold: float, optional
+            To be considered value, the bin in space need at least one adjacent bin with a relative difference within this range
         """
 
         # If no exclusion region, default it as an empty list
@@ -113,7 +125,11 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                          max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
                          time_resolution=time_resolution,
                          use_mini_irf_computation=use_mini_irf_computation,
-                         mini_irf_time_resolution=mini_irf_time_resolution)
+                         mini_irf_time_resolution=mini_irf_time_resolution,
+                         interpolation_type=interpolation_type,
+                         activate_interpolation_cleaning=activate_interpolation_cleaning,
+                         interpolation_cleaning_energy_relative_threshold=interpolation_cleaning_energy_relative_threshold,
+                         interpolation_cleaning_spatial_relative_threshold=interpolation_cleaning_spatial_relative_threshold)
 
     def fit_background(self, count_map, exp_map_total, exp_map):
         centers = self.offset_axis.center.to_value(u.deg)

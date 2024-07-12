@@ -40,7 +40,11 @@ class BaseAcceptanceMapCreator(ABC):
                  max_fraction_pixel_rotation_fov: float = 0.5,
                  time_resolution: u.Quantity = 0.1 * u.s,
                  use_mini_irf_computation: bool = False,
-                 mini_irf_time_resolution: u.Quantity = 1. * u.min) -> None:
+                 mini_irf_time_resolution: u.Quantity = 1. * u.min,
+                 interpolation_type: str = 'log',
+                 activate_interpolation_cleaning: bool = True,
+                 interpolation_cleaning_energy_relative_threshold: float = 1e-2,
+                 interpolation_cleaning_spatial_relative_threshold: float = 1e-1) -> None:
         """
         Create the class for calculating radial acceptance model.
 
@@ -75,6 +79,14 @@ class BaseAcceptanceMapCreator(ABC):
             Should improve the accuracy of the model, especially at high zenith angle.
         mini_irf_time_resolution : astropy.units.Quantity, optional
             Time resolution to use for mini irf used for computation of the final background model
+        interpolation_type: str, optional
+            Select the type of interpolation to be used, could be either log or linear, log tend to provided better results be could more easily create artefact that will cause issue
+        activate_interpolation_cleaning: bool, optional
+            If true, will activate the cleaning step after interpolation, it should help to eliminate artefact caused by interpolation
+        interpolation_cleaning_energy_relative_threshold: float, optional
+            To be considered value, the bin in energy need at least one adjacent bin with a relative difference within this range
+        interpolation_cleaning_spatial_relative_threshold: float, optional
+            To be considered value, the bin in space need at least one adjacent bin with a relative difference within this range
         """
 
         # If no exclusion region, default it as an empty list
@@ -85,10 +97,6 @@ class BaseAcceptanceMapCreator(ABC):
         self.energy_axis = energy_axis
         self.max_offset = max_offset
         self.exclude_regions = exclude_regions
-        self.cos_zenith_binning_method = cos_zenith_binning_method
-        self.cos_zenith_binning_parameter_value = cos_zenith_binning_parameter_value
-        self.initial_cos_zenith_binning = initial_cos_zenith_binning
-        self.max_angular_separation_wobble = max_angular_separation_wobble
 
         # Calculate map parameter
         self.n_bins_map = 2 * int(np.rint((self.max_offset / spatial_resolution).to(u.dimensionless_unscaled)))
@@ -104,6 +112,18 @@ class BaseAcceptanceMapCreator(ABC):
         self.max_fraction_pixel_rotation_fov = max_fraction_pixel_rotation_fov
         self.time_resolution = time_resolution
         self.zenith_binning_run_splitting = zenith_binning_run_splitting
+
+        # Store zenith binning parameters
+        self.cos_zenith_binning_method = cos_zenith_binning_method
+        self.cos_zenith_binning_parameter_value = cos_zenith_binning_parameter_value
+        self.initial_cos_zenith_binning = initial_cos_zenith_binning
+        self.max_angular_separation_wobble = max_angular_separation_wobble
+
+        # Store interpolation parameters
+        self.interpolation_type = interpolation_type
+        self.activate_interpolation_cleaning = activate_interpolation_cleaning
+        self.interpolation_cleaning_energy_relative_threshold = interpolation_cleaning_energy_relative_threshold
+        self.interpolation_cleaning_spatial_relative_threshold = interpolation_cleaning_spatial_relative_threshold
 
         # Store mini irf computation parameters
         self.use_mini_irf_computation = use_mini_irf_computation
