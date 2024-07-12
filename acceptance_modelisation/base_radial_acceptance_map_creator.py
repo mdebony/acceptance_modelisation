@@ -65,7 +65,7 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
         mini_irf_time_resolution : astropy.units.Quantity, optional
             Time resolution to use for mini irf used for computation of the final background model
         interpolation_type: str, optional
-            Select the type of interpolation to be used, could be either log or linear, log tend to provided better results be could more easily create artefact that will cause issue
+            Select the type of interpolation to be used, could be either "log" or "linear", log tend to provided better results be could more easily create artefact that will cause issue
         activate_interpolation_cleaning: bool, optional
             If true, will activate the cleaning step after interpolation, it should help to eliminate artefact caused by interpolation
         interpolation_cleaning_energy_relative_threshold: float, optional
