@@ -507,7 +507,6 @@ class BaseAcceptanceMapCreator(ABC):
                 time_interval = self._compute_time_intervals_based_on_zenith_bin(obs, zenith_bin)
                 for i in range(len(time_interval) - 1):
                     compute_observations.append(obs.select_time(Time([time_interval[i], time_interval[i + 1]])))
-                compute_observations_len = len(compute_observations)
         else:
             compute_observations = observations
 
