@@ -642,12 +642,9 @@ class BaseAcceptanceMapCreator(ABC):
         if off_observations is None:
             off_observations = observations
 
-        if base_model is None:
-            # Produce the binned model
-            dict_binned_model = self.create_model_cos_zenith_binned(off_observations)
-        else:
-            # Use the preexisting model
-            dict_binned_model = base_model
+        # If needed produce the zenith binned model
+        dict_binned_model = base_model or self.create_model_cos_zenith_binned(off_observations)
+
         cos_zenith_model = []
         key_model = []
         for k in np.sort(list(dict_binned_model.keys())):
