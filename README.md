@@ -171,7 +171,7 @@ acceptance_models = acceptance_model_creator.create_acceptance_map_per_observati
 
 ## Store background model for later application
 
-It could be in some case usefull to precompute a model and applying it on data later. The example below cover the case where you want to use a model per run using zenith interpolation and OFF runs.
+It could be in some case useful to precompute a model and applying it on data later. The example below cover the case where you want to use a model per run using zenith interpolation and OFF runs.
 
 However, it's possible to use this functionality without OFF runs or zenith interpolation. In the last case you just need to provide a model in a gammapy format.
 
