@@ -57,9 +57,9 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         zenith_binning_run_splitting : float, optional
             If true, will split each run to match zenith binning for the base model computation
             Could be computationally expensive, especially at high zenith with a high resolution zenith binning
-        max_fraction_pixel_rotation_fov : float, optional
+        max_fraction_pixel_rotation_fov : bool, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
-       time_resolution_run_splitting : astropy.units.Quantity, optional
+        time_resolution_run_splitting : astropy.units.Quantity, optional
             Time resolution to use for the computation of the rotation of the FoV and cut as function of the zenith bins
         method : str, optional
             Decide if the acceptance is a direct event stacking or a fitted model. 'stack' or 'fit'

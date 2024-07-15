@@ -45,7 +45,7 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
             Initial bin size for cos zenith binning
         max_angular_separation_wobble : u.Quantity, optional
             The maximum angular separation between identified wobbles, in degrees
-        zenith_binning_run_splitting : float, optional
+        zenith_binning_run_splitting : bool, optional
             If true, will split each run to match zenith binning for the base model computation
             Could be computationally expensive, especially at high zenith with a high resolution zenith binning
         max_fraction_pixel_rotation_fov : float, optional
