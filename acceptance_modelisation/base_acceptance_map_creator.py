@@ -623,7 +623,7 @@ class BaseAcceptanceMapCreator(ABC):
         Parameters
         ----------
         observations : gammapy.data.observations.Observations
-            The collection of observations for which will be targeted the acceptance map
+            The collection of observations to which the acceptance model will be applied
         off_observations : gammapy.data.observations.Observations
             The collection of observations used to generate the acceptance map, if None will be the observations provided as target
         base_model : dict of gammapy.irf.background.BackgroundIRF
@@ -673,7 +673,7 @@ class BaseAcceptanceMapCreator(ABC):
         Parameters
         ----------
         observations : gammapy.data.observations.Observations
-            The collection of observations for which will be targeted the acceptance map
+            The collection of observations to which the acceptance model will be applied
         off_observations : gammapy.data.observations.Observations
             The collection of observations used to generate the acceptance map, if None will be the observations provided as target
         base_model : dict of gammapy.irf.background.BackgroundIRF
@@ -745,7 +745,7 @@ class BaseAcceptanceMapCreator(ABC):
         Parameters
         ----------
         observations : gammapy.data.observations.Observations
-            The collection of observations for which will be targeted the acceptance map
+            The collection of observations to which the acceptance model will be applied
         zenith_binning : bool, optional
             If true the acceptance maps will be generated using zenith binning
         zenith_interpolation : bool, optional
