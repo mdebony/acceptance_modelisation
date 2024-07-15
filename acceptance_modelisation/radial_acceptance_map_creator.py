@@ -45,8 +45,9 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
             Initial bin size for cos zenith binning
         max_angular_separation_wobble : u.Quantity, optional
             The maximum angular separation between identified wobbles, in degrees
-        zenith_binning_run_splitting : flaot, optional
-            If true, will split each run to match zenith binning for the base model computation, no effect on the interpolation phase itself, could be compute expensive
+        zenith_binning_run_splitting : float, optional
+            If true, will split each run to match zenith binning for the base model computation
+            Could be computationally expensive, especially at high zenith with a high resolution zenith binning
         max_fraction_pixel_rotation_fov : float, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
         time_resolution_run_splitting : astropy.units.Quantity, optional
