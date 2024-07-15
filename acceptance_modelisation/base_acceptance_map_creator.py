@@ -494,7 +494,7 @@ class BaseAcceptanceMapCreator(ABC):
             raise
         per_wobble = i_method < 0
 
-        # Initial binning edge
+        # Initial bins edges
         cos_zenith_bin = np.sort(np.arange(1.0, 0. - self.initial_cos_zenith_binning, -self.initial_cos_zenith_binning))
         zenith_bin = np.rad2deg(np.arccos(cos_zenith_bin)) * u.deg
 
@@ -510,7 +510,7 @@ class BaseAcceptanceMapCreator(ABC):
         else:
             compute_observations = observations
 
-        # Determine initial binning value
+        # Determine initial bins values
         cos_zenith_observations = np.array([np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in compute_observations])
         livetime_observations = np.array([obs.observation_live_time_duration.to_value(u.s) for obs in compute_observations])
 
