@@ -764,8 +764,6 @@ class BaseAcceptanceMapCreator(ABC):
             A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
         """
 
-        self._check_base_model(base_model)
-
         if off_observations is None:
             off_observations = observations
 
