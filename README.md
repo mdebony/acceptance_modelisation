@@ -153,9 +153,9 @@ acceptance_models = acceptance_model_creator.create_acceptance_map_per_observati
                                                                                    zenith_interpolation=True)
 ```
 
-## Using off runs for background model
+## Using OFF runs for background model
 
-It's also possible to create a model from OFF runs and to apply in on runs you want to analyse. The exclusions regions should cover potential sources both in the on and off runs. The OFF runs doesn't need to be connected.
+It is also possible to create a model from OFF runs and to apply in ON runs you want to analyse. The exclusions regions should cover potential sources both in the ON and OFF runs at the same time. The OFF runs doesn't need to be spatially connected.
 ```python
 acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
                                                       offset_axis_acceptance,
@@ -171,7 +171,11 @@ acceptance_models = acceptance_model_creator.create_acceptance_map_per_observati
 
 ## Store background model for later application
 
-It could be in some case usefull to precompute a model and applying it on data later. The example below cover the case where you want to use a model per run using zenith interpolation and off runs. But it's possible to use this functionality without off runs or zenith interpolation. In the last case you just need to provide a model in a gammapy format.
+It could be in some case usefull to precompute a model and applying it on data later. The example below cover the case where you want to use a model per run using zenith interpolation and OFF runs.
+
+However, it's possible to use this functionality without OFF runs or zenith interpolation. In the last case you just need to provide a model in a gammapy format.
+
+There are at this stage no define file format for storing the intermediate results, we suggest to store the dictionary created directly using pickle.
 
 ### Creating and storing the model
 ```python
