@@ -574,6 +574,7 @@ class BaseAcceptanceMapCreator(ABC):
             The collection of observations to which the acceptance model will be applied
         off_observations : gammapy.data.observations.Observations
             The collection of observations used to generate the acceptance map, if None will be the observations provided as target
+            Will be ignored if a base_model parameter is provided
         base_model : BackgroundCollectionZenith
             If you have already a precomputed model, the method will use this model as base for the acceptance map instead of computing it from the data
 
@@ -586,6 +587,8 @@ class BaseAcceptanceMapCreator(ABC):
 
         if off_observations is None:
             off_observations = observations
+        elif base_model is not None:
+            logger.warning('The off observations provided will be ignored as a base model has been provided.')
 
         # If needed produce the zenith binned model
         dict_binned_model = base_model or self.create_model_cos_zenith_binned(off_observations)
@@ -622,6 +625,7 @@ class BaseAcceptanceMapCreator(ABC):
             The collection of observations to which the acceptance model will be applied
         off_observations : gammapy.data.observations.Observations
             The collection of observations used to generate the acceptance map, if None will be the observations provided as target
+            Will be ignored if a base_model parameter is provideds
         base_model : BackgroundCollectionZenith
             If you have already a precomputed model, the method will use this model as base for the acceptance map instead of computing it from the data
 
@@ -634,6 +638,8 @@ class BaseAcceptanceMapCreator(ABC):
 
         if off_observations is None:
             off_observations = observations
+        elif base_model is not None:
+            logger.warning('The off observations provided will be ignored as a base model has been provided.')
 
         # If needed produce the zenith binned model
         dict_binned_model = base_model or self.create_model_cos_zenith_binned(off_observations)
