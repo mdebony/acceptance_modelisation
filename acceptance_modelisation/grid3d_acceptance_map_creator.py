@@ -28,7 +28,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
                  zenith_binning_run_splitting: bool = False,
                  max_fraction_pixel_rotation_fov: float = 0.5,
-                 time_resolution_run_splitting: u.Quantity = 0.1 * u.s,
+                 time_resolution: u.Quantity = 0.1 * u.s,
                  method='stack',
                  fit_fnc='gaussian2d',
                  fit_seeds=None,
@@ -59,7 +59,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
             Could be computationally expensive, especially at high zenith with a high resolution zenith binning
         max_fraction_pixel_rotation_fov : bool, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
-        time_resolution_run_splitting : astropy.units.Quantity, optional
+        time_resolution : astropy.units.Quantity, optional
             Time resolution to use for the computation of the rotation of the FoV and cut as function of the zenith bins
         method : str, optional
             Decide if the acceptance is a direct event stacking or a fitted model. 'stack' or 'fit'
@@ -101,9 +101,9 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                          cos_zenith_binning_parameter_value=cos_zenith_binning_parameter_value,
                          initial_cos_zenith_binning=initial_cos_zenith_binning,
                          max_angular_separation_wobble=max_angular_separation_wobble,
-                         max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
                          zenith_binning_run_splitting=zenith_binning_run_splitting,
-                         time_resolution_run_splitting=time_resolution_run_splitting)
+                         max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
+                         time_resolution=time_resolution)
 
     def fit_background(self, count_map, exp_map_total, exp_map):
         centers = self.offset_axis.center.to_value(u.deg)

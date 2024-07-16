@@ -37,7 +37,7 @@ class BaseAcceptanceMapCreator(ABC):
                  max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
                  zenith_binning_run_splitting: bool = False,
                  max_fraction_pixel_rotation_fov: float = 0.5,
-                 time_resolution_run_splitting: u.Quantity = 0.1 * u.s, ) -> None:
+                 time_resolution: u.Quantity = 0.1 * u.s) -> None:
         """
         Create the class for calculating radial acceptance model.
 
@@ -64,7 +64,7 @@ class BaseAcceptanceMapCreator(ABC):
             Could be computationally expensive, especially at high zenith with a high resolution zenith binning
         max_fraction_pixel_rotation_fov : float, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
-        time_resolution_run_splitting : astropy.units.Quantity, optional
+        time_resolution : astropy.units.Quantity, optional
             Time resolution to use for the computation of the rotation of the FoV and cut as function of the zenith bins
         """
 
@@ -93,7 +93,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         # Store computation parameters for run splitting
         self.max_fraction_pixel_rotation_fov = max_fraction_pixel_rotation_fov
-        self.time_resolution_run_splitting = time_resolution_run_splitting
+        self.time_resolution = time_resolution
         self.zenith_binning_run_splitting = zenith_binning_run_splitting
 
     @staticmethod
@@ -270,7 +270,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         # Determine time interval for cutting the obs as function of the rotation of the Fov
         n_bin = max(2, int(np.rint(
-            ((obs.tstop - obs.tstart) / self.time_resolution_run_splitting).to_value(u.dimensionless_unscaled))))
+            ((obs.tstop - obs.tstart) / self.time_resolution).to_value(u.dimensionless_unscaled))))
         time_axis = np.linspace(obs.tstart, obs.tstop, num=n_bin)
         rotation_speed_fov = compute_rotation_speed_fov(time_axis, obs.get_pointing_icrs(obs.tmid),
                                                         obs.observatory_earth_location)
@@ -449,7 +449,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         # Create the time axis
         n_bin = max(2, int(np.rint(
-            ((obs.tstop - obs.tstart) / self.time_resolution_run_splitting).to_value(u.dimensionless_unscaled))))
+            ((obs.tstop - obs.tstart) / self.time_resolution).to_value(u.dimensionless_unscaled))))
         time_axis = np.linspace(obs.tstart, obs.tstop, num=n_bin)
 
         # Compute the zenith for each evaluation time
