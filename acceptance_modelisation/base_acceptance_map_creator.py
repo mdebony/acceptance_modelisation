@@ -501,7 +501,7 @@ class BaseAcceptanceMapCreator(ABC):
         # Cut observations if requested
         if self.zenith_binning_run_splitting:
             if abs(i_method) == 2:
-                logger.warning('Using a zenith binning requirement n_observation at the same time of using run splitting is not recommended and could lead to poor model. We recommend switching to a binning requirement based on livetime.')
+                logger.warning('Using a zenith binning requirement based on n_observation while using run splitting is not recommended and could lead to poor models. We recommend switching to a binning requirement based on livetime.')
             compute_observations = Observations()
             for obs in observations:
                 time_interval = self._compute_time_intervals_based_on_zenith_bin(obs, zenith_bin)
