@@ -20,6 +20,7 @@ from scipy.interpolate import interp1d
 
 from .exception import BackgroundModelFormatException
 from .toolbox import compute_rotation_speed_fov, get_unique_wobble_pointings
+from .bkg_collection import BackgroundCollectionZenith
 
 logger = logging.getLogger(__name__)
 
@@ -353,59 +354,6 @@ class BaseAcceptanceMapCreator(ABC):
 
         return count_map_background, exp_map_background, exp_map_background_total, livetime
 
-    def _check_base_model(self, base_model, only_raw_model: bool = False, only_zenith_model: bool = False):
-        """
-        Method to verify format of a base model provided for computation
-
-        Parameters
-        ----------
-        base_model : gammapy.irf.background.BackgroundIRF or dict of gammapy.irf.background.BackgroundIRF
-            The base model to check
-        only_raw_model : bool
-            If True will only accept raw model (BackgroundIRF format only)
-        only_zenith_model : bool
-            If True will only accept zenith binned model (dict of BackgroundIRF format only)
-
-        Raises
-        -------
-        BackgroundModelFormatException
-            In case of issues with the format will raise this exception with a message describing the issue
-        """
-
-        if base_model is not None:
-            if isinstance(base_model, BackgroundIRF):
-                if only_zenith_model:
-                    error_message = 'Invalid base model format, please provide a dict of BackgroundIRF'
-                    logger.error(error_message)
-                    raise BackgroundModelFormatException(error_message)
-            elif isinstance(base_model, dict):
-                if only_raw_model:
-                    error_message = 'Invalid base model format, please provide a BackgroundIRF'
-                    logger.error(error_message)
-                    raise BackgroundModelFormatException(error_message)
-                for k in base_model.keys():
-                    if not isinstance(k, (np.floating, float)):
-                        error_message = 'Invalid type for keys in the dictionary, should be float value, ' + str(
-                            type(k)) + ' provided'
-                        logger.error(error_message)
-                        raise BackgroundModelFormatException(error_message)
-                    elif k > 90.0 or k < 0.0:
-                        error_message = ('Invalid value for keys in the dictionary, the should represent the zenith of '
-                                         'the model in degree with a value between 0 and 90, ') + str(
-                            k) + ' provided'
-                        logger.error(error_message)
-                        raise BackgroundModelFormatException(error_message)
-                    if not isinstance(base_model[k], BackgroundIRF):
-                        error_message = 'Invalid base model format, each entry should be a BackgroundIRF, ' + str(
-                            type(base_model[k])) + ' provided'
-                        logger.error(error_message)
-                        raise BackgroundModelFormatException(error_message)
-            else:
-                error_message = ('Invalid base model format, please provide either a BackgroundIRF or a dict of '
-                                 'BackgroundIRF, ') + str(type(base_model)) + ' provided'
-                logger.error(error_message)
-                raise BackgroundModelFormatException(error_message)
-
     @abstractmethod
     def create_acceptance_map(self, observations: Observations) -> BackgroundIRF:
         """
@@ -427,7 +375,7 @@ class BaseAcceptanceMapCreator(ABC):
 
     def _normalised_model_per_run(self,
                                   observations: Observations,
-                                  acceptance_map: dict[Any, BackgroundIRF]) -> dict[Any, BackgroundIRF]:
+                                  acceptance_map: dict[int, BackgroundIRF]) -> dict[int, BackgroundIRF]:
         """
         Normalised the acceptance model associated to each run to the events associated with the run
 
@@ -480,7 +428,7 @@ class BaseAcceptanceMapCreator(ABC):
 
     def create_model_cos_zenith_binned(self,
                                        observations: Observations
-                                       ) -> dict[Any, BackgroundIRF]:
+                                       ) -> BackgroundCollectionZenith:
         """
         Calculate a model for each cos zenith bin
 
@@ -491,8 +439,8 @@ class BaseAcceptanceMapCreator(ABC):
 
         Returns
         -------
-        background : dict of gammapy.irf.background.Background2D or gammapy.irf.background.Background3D
-            A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
+        background : BackgroundCollectionZenith
+            The collection of background model with the zenith associated to each model
 
         """
         # Determine binning method. Convention : per_wobble methods have negative values
@@ -606,17 +554,17 @@ class BaseAcceptanceMapCreator(ABC):
                     f"{wobble} livetime per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations_and_wobble[i])[0].astype(int))}")
 
         # Create the dict for output of the function
-        dict_binned_model = {}
+        collection_binned_model = BackgroundCollectionZenith()
         for i in range(len(binned_model)):
-            dict_binned_model[np.rad2deg(np.arccos(bin_center[i]))] = binned_model[i]
+            collection_binned_model[np.rad2deg(np.arccos(bin_center[i]))] = binned_model[i]
 
-        return dict_binned_model
+        return collection_binned_model
 
     def create_acceptance_map_cos_zenith_binned(self,
                                                 observations: Observations,
                                                 off_observations: Observations = None,
-                                                base_model: dict[Any, BackgroundIRF] = None
-                                                ) -> dict[Any, BackgroundIRF]:
+                                                base_model: BackgroundCollectionZenith = None
+                                                ) -> dict[int, BackgroundIRF]:
         """
         Calculate an acceptance map per run using cos zenith binning
 
@@ -626,9 +574,8 @@ class BaseAcceptanceMapCreator(ABC):
             The collection of observations to which the acceptance model will be applied
         off_observations : gammapy.data.observations.Observations
             The collection of observations used to generate the acceptance map, if None will be the observations provided as target
-        base_model : dict of gammapy.irf.background.BackgroundIRF
+        base_model : BackgroundCollectionZenith
             If you have already a precomputed model, the method will use this model as base for the acceptance map instead of computing it from the data
-            Each key of the dictionary should correspond to the zenith in degree of the model
 
         Returns
         -------
@@ -636,8 +583,6 @@ class BaseAcceptanceMapCreator(ABC):
             A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
 
         """
-
-        self._check_base_model(base_model, only_zenith_model=True)
 
         if off_observations is None:
             off_observations = observations
@@ -650,6 +595,7 @@ class BaseAcceptanceMapCreator(ABC):
         for k in np.sort(list(dict_binned_model.keys())):
             cos_zenith_model.append(np.cos(np.deg2rad(k)))
             key_model.append(k)
+        cos_zenith_model = np.array(cos_zenith_model)
 
         # Find the closest model for each observation and associate it to each observation
         acceptance_map = {}
@@ -665,8 +611,8 @@ class BaseAcceptanceMapCreator(ABC):
     def create_acceptance_map_cos_zenith_interpolated(self,
                                                       observations: Observations,
                                                       off_observations: Observations = None,
-                                                      base_model: dict[Any, BackgroundIRF] = None
-                                                      ) -> dict[Any, BackgroundIRF]:
+                                                      base_model: BackgroundCollectionZenith = None
+                                                      ) -> dict[int, BackgroundIRF]:
         """
         Calculate an acceptance map per run using cos zenith binning and interpolation
 
@@ -676,9 +622,8 @@ class BaseAcceptanceMapCreator(ABC):
             The collection of observations to which the acceptance model will be applied
         off_observations : gammapy.data.observations.Observations
             The collection of observations used to generate the acceptance map, if None will be the observations provided as target
-        base_model : dict of gammapy.irf.background.BackgroundIRF
+        base_model : BackgroundCollectionZenith
             If you have already a precomputed model, the method will use this model as base for the acceptance map instead of computing it from the data
-            Each key of the dictionary should correspond to the zenith in degree of the model
 
         Returns
         -------
@@ -686,8 +631,6 @@ class BaseAcceptanceMapCreator(ABC):
             A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
 
         """
-
-        self._check_base_model(base_model, only_zenith_model=True)
 
         if off_observations is None:
             off_observations = observations
@@ -703,6 +646,7 @@ class BaseAcceptanceMapCreator(ABC):
         for k in np.sort(list(dict_binned_model.keys())):
             binned_model.append(dict_binned_model[k])
             cos_zenith_model.append(np.cos(np.deg2rad(k)))
+        cos_zenith_model = np.array(cos_zenith_model)
 
         acceptance_map = {}
         if len(binned_model) <= 1:
@@ -713,7 +657,7 @@ class BaseAcceptanceMapCreator(ABC):
             data_cube = np.zeros(tuple([len(binned_model), ] + list(binned_model[0].data.shape))) * binned_model[0].unit
             for i in range(len(binned_model)):
                 data_cube[i] = binned_model[i].data * binned_model[i].unit
-            interp_func = interp1d(x=np.array(cos_zenith_model),
+            interp_func = interp1d(x=cos_zenith_model,
                                    y=np.log10(data_cube.value + np.finfo(np.float64).tiny),
                                    axis=0,
                                    fill_value='extrapolate')
@@ -737,8 +681,8 @@ class BaseAcceptanceMapCreator(ABC):
                                               zenith_interpolation: bool = False,
                                               runwise_normalisation: bool = True,
                                               off_observations: Observations = None,
-                                              base_model=None,
-                                              ) -> dict[Any, BackgroundIRF]:
+                                              base_model: BackgroundCollectionZenith | BackgroundIRF = None,
+                                              ) -> dict[int, BackgroundIRF]:
         """
         Calculate an acceptance map with the norm adjusted for each run
 
@@ -754,9 +698,9 @@ class BaseAcceptanceMapCreator(ABC):
             If true the acceptance maps will be normalised runwise to the observations
         off_observations : gammapy.data.observations.Observations
             The collection of observations used to generate the acceptance map, if None will be the observations provided as target
-        base_model : gammapy.irf.background.BackgroundIRF or dict of gammapy.irf.background.BackgroundIRF
+        base_model : gammapy.irf.background.BackgroundIRF or BackgroundCollectionZenith
             If you have already a precomputed model, the method will use this model as base for the acceptance map instead of computing it from the data
-            In the case of a zenith dependant model, each key of the dictionary should correspond to the zenith in degree of the model
+            In the case of a zenith dependant model, you should provide a BackgroundCollectionZenith object
 
         Returns
         -------
@@ -778,7 +722,6 @@ class BaseAcceptanceMapCreator(ABC):
                                                                           base_model=base_model)
         else:
             if base_model is not None:
-                self._check_base_model(base_model, only_raw_model=True)
                 unique_base_acceptance_map = base_model
             else:
                 unique_base_acceptance_map = self.create_acceptance_map(off_observations)
