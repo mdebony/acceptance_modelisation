@@ -35,8 +35,9 @@ class BaseAcceptanceMapCreator(ABC):
                  cos_zenith_binning_parameter_value: int = 3600,
                  initial_cos_zenith_binning: float = 0.01,
                  max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
+                 zenith_binning_run_splitting: bool = False,
                  max_fraction_pixel_rotation_fov: float = 0.5,
-                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s) -> None:
+                 time_resolution: u.Quantity = 0.1 * u.s) -> None:
         """
         Create the class for calculating radial acceptance model.
 
@@ -58,10 +59,13 @@ class BaseAcceptanceMapCreator(ABC):
             Initial bin size for cos zenith binning
         max_angular_separation_wobble : u.Quantity, optional
             The maximum angular separation between identified wobbles, in degrees
+        zenith_binning_run_splitting : bool, optional
+            If true, will split each run to match zenith binning for the base model computation
+            Could be computationally expensive, especially at high zenith with a high resolution zenith binning
         max_fraction_pixel_rotation_fov : float, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
-        time_resolution_rotation_fov : astropy.units.Quantity, optional
-            Time resolution to use for the computation of the rotation of the FoV
+        time_resolution : astropy.units.Quantity, optional
+            Time resolution to use for the computation of the rotation of the FoV and cut as function of the zenith bins
         """
 
         # If no exclusion region, default it as an empty list
@@ -87,9 +91,10 @@ class BaseAcceptanceMapCreator(ABC):
             'Computation will be made with a bin size of {:.3f} arcmin'.format(
                 self.spatial_bin_size.to_value(u.arcmin)))
 
-        # Store rotation computation parameters
+        # Store computation parameters for run splitting
         self.max_fraction_pixel_rotation_fov = max_fraction_pixel_rotation_fov
-        self.time_resolution_rotation_fov = time_resolution_rotation_fov
+        self.time_resolution = time_resolution
+        self.zenith_binning_run_splitting = zenith_binning_run_splitting
 
     @staticmethod
     def _transform_obs_to_camera_frame(obs: Observation) -> Observation:
@@ -265,7 +270,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         # Determine time interval for cutting the obs as function of the rotation of the Fov
         n_bin = max(2, int(np.rint(
-            ((obs.tstop - obs.tstart) / self.time_resolution_rotation_fov).to_value(u.dimensionless_unscaled))))
+            ((obs.tstop - obs.tstart) / self.time_resolution).to_value(u.dimensionless_unscaled))))
         time_axis = np.linspace(obs.tstart, obs.tstop, num=n_bin)
         rotation_speed_fov = compute_rotation_speed_fov(time_axis, obs.get_pointing_icrs(obs.tmid),
                                                         obs.observatory_earth_location)
@@ -425,6 +430,41 @@ class BaseAcceptanceMapCreator(ABC):
 
         return normalised_acceptance_map
 
+    def _compute_time_intervals_based_on_zenith_bin(self, obs: Observation, edge_zenith_bin: u.Quantity) -> Time:
+        """
+        Calculate time intervals based on an input zenith binning
+
+        Parameters
+        ----------
+        obs : gammapy.data.observations.Observation
+            The observation used to calculate time intervals.
+        edge_zenith_bin : astropy.units.Quantity
+            The edge of the bins used for zenith binning
+
+        Returns
+        -------
+        time_intervals : astropy.time.Time
+            The time intervals for cutting the observation into time bins.
+        """
+
+        # Create the time axis
+        n_bin = max(2, int(np.rint(
+            ((obs.tstop - obs.tstart) / self.time_resolution).to_value(u.dimensionless_unscaled))))
+        time_axis = np.linspace(obs.tstart, obs.tstop, num=n_bin)
+
+        # Compute the zenith for each evaluation time
+        altaz_coordinates = obs.get_pointing_altaz(time_axis)
+        zenith_values = altaz_coordinates.zen
+        if np.any(zenith_values < np.min(edge_zenith_bin)) or np.any(zenith_values > np.max(edge_zenith_bin)):
+            logger.error('Run with zenith value outside of the considered range for zenith binning')
+
+        # Split the time interval to transition between zenith bin
+        id_bin = np.digitize(zenith_values, edge_zenith_bin)
+        bin_transition = id_bin[2:] != id_bin[1:-1]
+        time_interval = Time([obs.tstart, ] + [time_axis[1:-1][bin_transition], ] + [obs.tstop, ])
+
+        return time_interval
+
     def _create_model_cos_zenith_binned(self,
                                         observations: Observations
                                         ) -> dict[Any, BackgroundIRF]:
@@ -442,6 +482,7 @@ class BaseAcceptanceMapCreator(ABC):
             A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
 
         """
+
         # Determine binning method. Convention : per_wobble methods have negative values
         methods = {'min_livetime': 1, 'min_livetime_per_wobble': -1, 'min_n_observation': 2,
                    'min_n_observation_per_wobble': -2}
@@ -453,10 +494,25 @@ class BaseAcceptanceMapCreator(ABC):
             raise
         per_wobble = i_method < 0
 
-        # Determine initial binning value
+        # Initial bins edges
         cos_zenith_bin = np.sort(np.arange(1.0, 0. - self.initial_cos_zenith_binning, -self.initial_cos_zenith_binning))
-        cos_zenith_observations = np.array([np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in observations])
-        livetime_observations = np.array([obs.observation_live_time_duration.to_value(u.s) for obs in observations])
+        zenith_bin = np.rad2deg(np.arccos(cos_zenith_bin)) * u.deg
+
+        # Cut observations if requested
+        if self.zenith_binning_run_splitting:
+            if abs(i_method) == 2:
+                logger.warning('Using a zenith binning requirement based on n_observation while using run splitting is not recommended and could lead to poor models. We recommend switching to a binning requirement based on livetime.')
+            compute_observations = Observations()
+            for obs in observations:
+                time_interval = self._compute_time_intervals_based_on_zenith_bin(obs, zenith_bin)
+                for i in range(len(time_interval) - 1):
+                    compute_observations.append(obs.select_time(Time([time_interval[i], time_interval[i + 1]])))
+        else:
+            compute_observations = observations
+
+        # Determine initial bins values
+        cos_zenith_observations = np.array([np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in compute_observations])
+        livetime_observations = np.array([obs.observation_live_time_duration.to_value(u.s) for obs in compute_observations])
 
         # Select the quantity used to count observations
         if i_method in [-1, 1]:
@@ -467,7 +523,7 @@ class BaseAcceptanceMapCreator(ABC):
         # Gather runs per separation angle or all together. Define the minimum multiplicity (-1) to create a zenith bin.
         if per_wobble:
             wobble_observations = np.array(
-                get_unique_wobble_pointings(observations, self.max_angular_separation_wobble))
+                get_unique_wobble_pointings(compute_observations, self.max_angular_separation_wobble))
             multiplicity_wob = 1
         else:
             wobble_observations = np.full(len(cos_zenith_observations), 'any', dtype=np.object_)
@@ -515,7 +571,7 @@ class BaseAcceptanceMapCreator(ABC):
         binned_observations = []
         for i in range((len(cos_zenith_bin) - 1)):
             binned_observations.append(Observations())
-        for obs in observations:
+        for obs in compute_observations:
             binned_observations[np.digitize(np.cos(obs.get_pointing_altaz(obs.tmid).zen), cos_zenith_bin) - 1].append(
                 obs)
 

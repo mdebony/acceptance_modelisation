@@ -26,8 +26,9 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  cos_zenith_binning_parameter_value: int = 3600,
                  initial_cos_zenith_binning: float = 0.01,
                  max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
+                 zenith_binning_run_splitting: bool = False,
                  max_fraction_pixel_rotation_fov: float = 0.5,
-                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
+                 time_resolution: u.Quantity = 0.1 * u.s,
                  method='stack',
                  fit_fnc='gaussian2d',
                  fit_seeds=None,
@@ -53,10 +54,13 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
             Initial bin size for cos zenith binning
         max_angular_separation_wobble : u.Quantity, optional
             The maximum angular separation between identified wobbles, in degrees
-        max_fraction_pixel_rotation_fov : float, optional
+        zenith_binning_run_splitting : float, optional
+            If true, will split each run to match zenith binning for the base model computation
+            Could be computationally expensive, especially at high zenith with a high resolution zenith binning
+        max_fraction_pixel_rotation_fov : bool, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
-        time_resolution_rotation_fov : astropy.unit.Quantity, optional
-            Time resolution to use for the computation of the rotation of the FoV
+        time_resolution : astropy.units.Quantity, optional
+            Time resolution to use for the computation of the rotation of the FoV and cut as function of the zenith bins
         method : str, optional
             Decide if the acceptance is a direct event stacking or a fitted model. 'stack' or 'fit'
         fit_fnc: str or function
@@ -89,10 +93,17 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         self.fit_bounds = fit_bounds
 
         # Initiate upper instance
-        super().__init__(energy_axis, max_offset, spatial_resolution, exclude_regions,
-                         cos_zenith_binning_method, cos_zenith_binning_parameter_value,
-                         initial_cos_zenith_binning, max_angular_separation_wobble, max_fraction_pixel_rotation_fov,
-                         time_resolution_rotation_fov)
+        super().__init__(energy_axis=energy_axis,
+                         max_offset=max_offset,
+                         spatial_resolution=spatial_resolution,
+                         exclude_regions=exclude_regions,
+                         cos_zenith_binning_method=cos_zenith_binning_method,
+                         cos_zenith_binning_parameter_value=cos_zenith_binning_parameter_value,
+                         initial_cos_zenith_binning=initial_cos_zenith_binning,
+                         max_angular_separation_wobble=max_angular_separation_wobble,
+                         zenith_binning_run_splitting=zenith_binning_run_splitting,
+                         max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
+                         time_resolution=time_resolution)
 
     def fit_background(self, count_map, exp_map_total, exp_map):
         centers = self.offset_axis.center.to_value(u.deg)
