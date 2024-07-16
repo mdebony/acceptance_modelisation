@@ -591,6 +591,10 @@ class BaseAcceptanceMapCreator(ABC):
             logger.warning('The off observations provided will be ignored as a base model has been provided.')
 
         # If needed produce the zenith binned model
+        if base_model is not None and not isinstance(base_model, BackgroundCollectionZenith):
+            error_message = 'The models should be provided as a BackgroundCollectionZenith object'
+            logger.error(error_message)
+            raise BackgroundModelFormatException(error_message)
         dict_binned_model = base_model or self.create_model_cos_zenith_binned(off_observations)
 
         cos_zenith_model = []
@@ -642,6 +646,10 @@ class BaseAcceptanceMapCreator(ABC):
             logger.warning('The off observations provided will be ignored as a base model has been provided.')
 
         # If needed produce the zenith binned model
+        if base_model is not None and not isinstance(base_model, BackgroundCollectionZenith):
+            error_message = 'The models should be provided as a BackgroundCollectionZenith object'
+            logger.error(error_message)
+            raise BackgroundModelFormatException(error_message)
         dict_binned_model = base_model or self.create_model_cos_zenith_binned(off_observations)
 
         binned_model = []
@@ -728,6 +736,10 @@ class BaseAcceptanceMapCreator(ABC):
                                                                           base_model=base_model)
         else:
             if base_model is not None:
+                if not isinstance(base_model, BackgroundIRF):
+                    error_message = 'The model provided should be a gammapy BackgroundIRF object'
+                    logger.error(error_message)
+                    raise BackgroundModelFormatException(error_message)
                 unique_base_acceptance_map = base_model
             else:
                 unique_base_acceptance_map = self.create_acceptance_map(off_observations)
