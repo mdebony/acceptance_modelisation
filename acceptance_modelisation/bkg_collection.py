@@ -74,7 +74,7 @@ class BackgroundCollectionZenith:
             error_message = 'Invalid model, please provide a BackgroundIRF'
             logger.error(error_message)
             raise BackgroundModelFormatException(error_message)
-        elif len(self.bkg_dict) > 0 and not type(value) is type(self.bkg_dict[self.bkg_dict.keys()[0]]):
+        elif len(self.bkg_dict) > 0 and not type(value) is type(self.bkg_dict[list(self.bkg_dict.keys())[0]]):
             error_message = 'All the model in the collection need to be of the same type, ' + str(
                 type(value)) + ' provided instead of ' + str(type(self.bkg_dict[list(self.bkg_dict.keys())[0]]))
             logger.error(error_message)
