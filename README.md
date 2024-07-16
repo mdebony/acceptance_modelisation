@@ -175,7 +175,7 @@ It could be in some case useful to precompute a model and applying it on data la
 
 However, it's possible to use this functionality without OFF runs or zenith interpolation. In the last case you just need to provide a model in a gammapy format.
 
-There are at this stage no define file format for storing the intermediate results, we suggest to store the dictionary created directly using pickle.
+There are at this stage no define file format for storing the intermediate results, we suggest to store the BackgroundCollectionZenith object created directly using pickle.
 
 ### Creating and storing the model
 ```python

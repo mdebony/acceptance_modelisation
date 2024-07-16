@@ -698,6 +698,7 @@ class BaseAcceptanceMapCreator(ABC):
             If true the acceptance maps will be normalised runwise to the observations
         off_observations : gammapy.data.observations.Observations
             The collection of observations used to generate the acceptance map, if None will be the observations provided as target
+            Will be ignored if a base_model parameter is provided
         base_model : gammapy.irf.background.BackgroundIRF or BackgroundCollectionZenith
             If you have already a precomputed model, the method will use this model as base for the acceptance map instead of computing it from the data
             In the case of a zenith dependant model, you should provide a BackgroundCollectionZenith object
