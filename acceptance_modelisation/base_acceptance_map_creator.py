@@ -710,6 +710,8 @@ class BaseAcceptanceMapCreator(ABC):
 
         if off_observations is None:
             off_observations = observations
+        elif base_model is not None:
+            logger.warning('The off observations provided will be ignored as a base model has been provided.')
 
         acceptance_map = {}
         if zenith_interpolation:
