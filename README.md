@@ -153,9 +153,9 @@ acceptance_models = acceptance_model_creator.create_acceptance_map_per_observati
                                                                                    zenith_interpolation=True)
 ```
 
-## Using off runs for background model
+## Using OFF runs for background model
 
-It's also possible to create a model from OFF runs and to apply in on runs you want to analyse. The exclusions regions should cover potential sources both in the on and off runs. The OFF runs doesn't need to be connected.
+It is also possible to create a model from OFF runs and to apply in ON runs you want to analyse. The exclusions regions should cover potential sources both in the ON and OFF runs at the same time. The OFF runs don't need to be spatially connected.
 ```python
 acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
                                                       offset_axis_acceptance,
@@ -171,29 +171,47 @@ acceptance_models = acceptance_model_creator.create_acceptance_map_per_observati
 
 ## Store background model for later application
 
-It could be in some case usefull to precompute a model and applying it on data later. The example below cover the case where you want to use a model per run using zenith interpolation and off runs. But it's possible to use this functionality without off runs or zenith interpolation. In the last case you just need to provide a model in a gammapy format.
+It could be in some case useful to precompute a model and applying it on data later. The example below cover the case where you want to use a model per run using zenith interpolation and OFF runs.
 
-### Creating and storing the model
+However, it's possible to use this functionality without OFF runs or zenith interpolation. In the last case you just need to provide a model in a gammapy format.
+
+There are at this stage no define file format for storing the intermediate results, we suggest to store the BackgroundCollectionZenith object created directly using pickle.
+
+### Creating the model
+
+The example below create the `BackgroundCollectionZenith` object containing the zenith binned model.
+The `obs_collection` provided could either be your ON runs if you want to compute background directly from the data or OFF runs if you want to use other data for the background model.
+
 ```python
-import pickle
 acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
                                                       offset_axis_acceptance,
                                                       exclude_regions=exclude_regions,
                                                       oversample_map=10,
                                                       min_run_per_cos_zenith_bin=3,
                                                       initial_cos_zenith_binning=0.01)
-base_model = acceptance_model_creator.create_model_cos_zenith_binned(obs_collection_off)
+base_model = acceptance_model_creator.create_model_cos_zenith_binned(obs_collection)
+```
 
+### Storing and loading a model with pickle
+
+The `BackgroundCollectionZenith` object containing the models could then be store using pickle.
+```python
+import pickle
 with open('my_bkg_model.pck', mode='wb') as f:
     pickle.dump(base_model, f)
 ```
 
-### Loading and applying the model
+It is then possible to retrieve it later using pickle.
 ```python
 import pickle
 with open('my_bkg_model.pck', mode='rb') as f:
     base_model = pickle.load(f)
-    
+```
+
+### Applying a model in memory
+
+When you have a precomputed model in memory, it is possible to apply it directly on a give set of runs by using the `base_mode` parameter.
+```python
 acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
                                                       offset_axis_acceptance,
                                                       exclude_regions=exclude_regions)
