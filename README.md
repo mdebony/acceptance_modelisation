@@ -179,8 +179,8 @@ There are at this stage no define file format for storing the intermediate resul
 
 ### Creating the model
 
-The example below create the object containing the zenith binned model.
-The ``obs_collection` provided could either be your ON runs if you want to compute background directly from the data or OFF runs if you want to use other data for the background model.
+The example below create the `BackgroundCollectionZenith` object containing the zenith binned model.
+The `obs_collection` provided could either be your ON runs if you want to compute background directly from the data or OFF runs if you want to use other data for the background model.
 
 ```python
 acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
@@ -194,14 +194,14 @@ base_model = acceptance_model_creator.create_model_cos_zenith_binned(obs_collect
 
 ### Storing and loading a model with pickle
 
-The object containing the models could then be store using pickle.
+The `BackgroundCollectionZenith` object containing the models could then be store using pickle.
 ```python
 import pickle
 with open('my_bkg_model.pck', mode='wb') as f:
     pickle.dump(base_model, f)
 ```
 
-It is then possible to retrieve it later using pickle again.
+It is then possible to retrieve it later using pickle.
 ```python
 import pickle
 with open('my_bkg_model.pck', mode='rb') as f:
@@ -210,7 +210,7 @@ with open('my_bkg_model.pck', mode='rb') as f:
 
 ### Applying a model in memory
 
-When you have a precomputed model in memory, it is possible to apply it directly on a give set of runs.
+When you have a precomputed model in memory, it is possible to apply it directly on a give set of runs by using the `base_mode` parameter.
 ```python
 acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
                                                       offset_axis_acceptance,
