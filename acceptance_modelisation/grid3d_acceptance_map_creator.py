@@ -35,7 +35,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  fit_fnc='gaussian2d',
                  fit_seeds=None,
                  fit_bounds=None,
-                 interpolation_type: str = 'log',
+                 interpolation_type: str = 'linear',
                  activate_interpolation_cleaning: bool = False,
                  interpolation_cleaning_energy_relative_threshold: float = 1e-3,
                  interpolation_cleaning_spatial_relative_threshold: float = 1e-2) -> None:
