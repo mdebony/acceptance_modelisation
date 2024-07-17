@@ -805,7 +805,7 @@ class BaseAcceptanceMapCreator(ABC):
             if interp_bkg.ndim == 3:
                 count_valid_neighbour_condition_spatial += compute_neighbour_condition_validation(interp_bkg, axis=2, relative_threshold=self.interpolation_cleaning_spatial_relative_threshold)
 
-            mask_valid = count_valid_neighbour_condition_energy > 0 & count_valid_neighbour_condition_spatial > 1
+            mask_valid = np.logical_and(count_valid_neighbour_condition_energy > 0, count_valid_neighbour_condition_spatial > 1)
             interp_bkg[~mask_valid] = 0.
 
         return interp_bkg

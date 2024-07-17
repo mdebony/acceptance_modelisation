@@ -186,8 +186,8 @@ def compute_neighbour_condition_validation(a, axis, relative_threshold):
     relative_difference_down = np.abs(a[slice_up] - a[slice_down]) / a[slice_up]
 
     # Compute if neighbour condition is validated for up and down
-    neighbour_condition_up = relative_difference_up > relative_threshold & relative_difference_up < 1./relative_threshold
-    neighbour_condition_down = relative_difference_down > relative_threshold & relative_difference_down < 1./relative_threshold
+    neighbour_condition_up = np.logical_and(relative_difference_up > relative_threshold, relative_difference_up < 1./relative_threshold)
+    neighbour_condition_down = np.logical_and(relative_difference_down > relative_threshold, relative_difference_down < 1./relative_threshold)
 
     # Compute for each case the number of time the condition is valid
     count_neighbour_condition_valid[slice_down] += neighbour_condition_up.astype(np.int8)
