@@ -37,8 +37,8 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  fit_bounds=None,
                  interpolation_type: str = 'log',
                  activate_interpolation_cleaning: bool = False,
-                 interpolation_cleaning_energy_relative_threshold: float = 1e-2,
-                 interpolation_cleaning_spatial_relative_threshold: float = 1e-1) -> None:
+                 interpolation_cleaning_energy_relative_threshold: float = 1e-3,
+                 interpolation_cleaning_spatial_relative_threshold: float = 1e-2) -> None:
         """
         Create the class for calculating 3D grid acceptance model
 

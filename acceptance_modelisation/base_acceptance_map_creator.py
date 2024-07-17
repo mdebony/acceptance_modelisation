@@ -44,8 +44,8 @@ class BaseAcceptanceMapCreator(ABC):
                  mini_irf_time_resolution: u.Quantity = 1. * u.min,
                  interpolation_type: str = 'log',
                  activate_interpolation_cleaning: bool = False,
-                 interpolation_cleaning_energy_relative_threshold: float = 1e-2,
-                 interpolation_cleaning_spatial_relative_threshold: float = 1e-1) -> None:
+                 interpolation_cleaning_energy_relative_threshold: float = 1e-3,
+                 interpolation_cleaning_spatial_relative_threshold: float = 1e-2) -> None:
         """
         Create the class for calculating radial acceptance model.
 
@@ -800,6 +800,8 @@ class BaseAcceptanceMapCreator(ABC):
         i = 0
         while (i < 1 or not np.allclose(base_model, final_model)) and (i < self.max_cleaning_iteration):
             base_model = final_model.copy()
+            i += 1
+
             count_valid_neighbour_condition_energy = compute_neighbour_condition_validation(base_model, axis=0,
                                                                                             relative_threshold=self.interpolation_cleaning_energy_relative_threshold)
             count_valid_neighbour_condition_spatial = compute_neighbour_condition_validation(base_model, axis=1,
@@ -834,7 +836,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         if self.interpolation_type == 'log':
             interp_bkg = (10. ** interp_func(np.cos(zenith)))
-            interp_bkg[interp_bkg < 100 * self.threshold_value_log_interpolation] = 0.
+            interp_bkg[interp_bkg < 1000 * self.threshold_value_log_interpolation] = 0.
         elif self.interpolation_type == 'linear':
             interp_bkg = interp_func(np.cos(zenith))
         else:

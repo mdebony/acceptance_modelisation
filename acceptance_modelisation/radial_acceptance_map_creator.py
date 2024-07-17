@@ -27,8 +27,8 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
                  mini_irf_time_resolution: u.Quantity = 1. * u.min,
                  interpolation_type: str = 'log',
                  activate_interpolation_cleaning: bool = False,
-                 interpolation_cleaning_energy_relative_threshold: float = 1e-2,
-                 interpolation_cleaning_spatial_relative_threshold: float = 1e-1) -> None:
+                 interpolation_cleaning_energy_relative_threshold: float = 1e-3,
+                 interpolation_cleaning_spatial_relative_threshold: float = 1e-2) -> None:
         """
         Create the class for calculating radial acceptance model
         This class should be use when strict 2D model is good enough
