@@ -21,8 +21,9 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  cos_zenith_binning_parameter_value: int = 3600,
                  initial_cos_zenith_binning: float = 0.01,
                  max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
+                 zenith_binning_run_splitting: bool = False,
                  max_fraction_pixel_rotation_fov: float = 0.5,
-                 time_resolution_rotation_fov: u.Quantity = 0.1 * u.s,
+                 time_resolution: u.Quantity = 0.1 * u.s,
                  use_mini_irf_computation: bool = False,
                  mini_irf_time_resolution: u.Quantity = 1. * u.min) -> None:
         """
@@ -46,10 +47,13 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
             Initial bin size for cos zenith binning
         max_angular_separation_wobble : u.Quantity, optional
             The maximum angular separation between identified wobbles, in degrees
+        zenith_binning_run_splitting : bool, optional
+            If true, will split each run to match zenith binning for the base model computation
+            Could be computationally expensive, especially at high zenith with a high resolution zenith binning
         max_fraction_pixel_rotation_fov : float, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
-        time_resolution_rotation_fov : astropy.unit.Quantity, optional
-            Time resolution to use for the computation of the rotation of the FoV
+        time_resolution : astropy.units.Quantity, optional
+            Time resolution to use for the computation of the rotation of the FoV and cut as function of the zenith bins
         use_mini_irf_computation : bool, optional
             If true, during zenith interpolation and binning will compute first mini irf for each part of the run before averaging them.
             Should improve the accuracy of the model, especially at high zenith angle. Actiate it could singificantly increase computation time.
@@ -77,8 +81,9 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
                          cos_zenith_binning_parameter_value=cos_zenith_binning_parameter_value,
                          initial_cos_zenith_binning=initial_cos_zenith_binning,
                          max_angular_separation_wobble=max_angular_separation_wobble,
-                         max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
-                         time_resolution_rotation_fov=time_resolution_rotation_fov,
+                         zenith_binning_run_splitting = zenith_binning_run_splitting,
+                         max_fraction_pixel_rotation_fov = max_fraction_pixel_rotation_fov,
+                         time_resolution = time_resolution,
                          use_mini_irf_computation=use_mini_irf_computation,
                          mini_irf_time_resolution=mini_irf_time_resolution)
 

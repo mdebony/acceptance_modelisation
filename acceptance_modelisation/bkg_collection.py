@@ -63,21 +63,17 @@ class BackgroundCollectionZenith:
         if not isinstance(key, (np.floating, float)):
             error_message = 'Invalid type for keys in the dictionary, should be float value, ' + str(
                 type(key)) + ' provided'
-            logger.error(error_message)
             raise BackgroundModelFormatException(error_message)
         elif key > 90.0 or key < 0.0:
             error_message = ('Invalid value for keys in the dictionary, the should represent the zenith of '
                              'the model in degree with a value between 0 and 90, ') + str(key) + ' provided'
-            logger.error(error_message)
             raise BackgroundModelFormatException(error_message)
         elif not isinstance(value, BackgroundIRF):
             error_message = 'Invalid model, please provide a BackgroundIRF'
-            logger.error(error_message)
             raise BackgroundModelFormatException(error_message)
         elif len(self.bkg_dict) > 0 and not type(value) is type(self.bkg_dict[list(self.bkg_dict.keys())[0]]):
             error_message = 'All the model in the collection need to be of the same type, ' + str(
                 type(value)) + ' provided instead of ' + str(type(self.bkg_dict[list(self.bkg_dict.keys())[0]]))
-            logger.error(error_message)
             raise BackgroundModelFormatException(error_message)
         else:
             self.bkg_dict[key] = value
