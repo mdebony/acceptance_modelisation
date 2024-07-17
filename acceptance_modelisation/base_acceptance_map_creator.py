@@ -774,11 +774,6 @@ class BaseAcceptanceMapCreator(ABC):
             A dict with observation number as key and a background model that could be used as an acceptance model associated at each key
         """
 
-        if off_observations is None:
-            off_observations = observations
-        elif base_model is not None:
-            logger.warning('The off observations provided will be ignored as a base model has been provided.')
-
         acceptance_map = {}
         if zenith_interpolation:
             acceptance_map = self.create_acceptance_map_cos_zenith_interpolated(observations=observations,
@@ -789,6 +784,11 @@ class BaseAcceptanceMapCreator(ABC):
                                                                           off_observations=off_observations,
                                                                           base_model=base_model)
         else:
+            if off_observations is None:
+                off_observations = observations
+            elif base_model is not None:
+                logger.warning('The off observations provided will be ignored as a base model has been provided.')
+
             if base_model is not None:
                 if not isinstance(base_model, BackgroundIRF):
                     error_message = 'The model provided should be a gammapy BackgroundIRF object'
