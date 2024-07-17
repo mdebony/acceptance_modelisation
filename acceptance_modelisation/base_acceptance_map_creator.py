@@ -44,7 +44,7 @@ class BaseAcceptanceMapCreator(ABC):
                  mini_irf_time_resolution: u.Quantity = 1. * u.min,
                  interpolation_type: str = 'linear',
                  activate_interpolation_cleaning: bool = False,
-                 interpolation_cleaning_energy_relative_threshold: float = 1e-3,
+                 interpolation_cleaning_energy_relative_threshold: float = 1e-4,
                  interpolation_cleaning_spatial_relative_threshold: float = 1e-2) -> None:
         """
         Create the class for calculating radial acceptance model.
@@ -811,8 +811,8 @@ class BaseAcceptanceMapCreator(ABC):
                                                                                                   relative_threshold=self.interpolation_cleaning_spatial_relative_threshold)
 
             mask_energy = count_valid_neighbour_condition_energy > 0
-            mask_neighbour = count_valid_neighbour_condition_spatial > (1 if base_model.ndim == 3 else 0)
-            mask_valid = np.logical_and(mask_energy, mask_neighbour)
+            mask_spatial = count_valid_neighbour_condition_spatial > (1 if base_model.ndim == 3 else 0)
+            mask_valid = np.logical_and(mask_energy, mask_spatial)
             final_model[~mask_valid] = 0.
 
         return final_model

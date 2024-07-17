@@ -171,7 +171,7 @@ def compute_neighbour_condition_validation(a, axis, relative_threshold):
     """
 
     # Create results table
-    count_neighbour_condition_valid = np.zeros(a.shape, dtype=np.int8)
+    count_neighbour_condition_valid = np.zeros(a.shape, dtype=np.uint8)
 
     # Define the slice to access array for computation
     slice_down = [slice(None)] * a.ndim
@@ -182,15 +182,15 @@ def compute_neighbour_condition_validation(a, axis, relative_threshold):
     slice_up = tuple(slice_up)
 
     # Compute the relative difference
-    relative_difference_up = np.abs(a[slice_up] - a[slice_down]) / a[slice_down]
-    relative_difference_down = np.abs(a[slice_up] - a[slice_down]) / a[slice_up]
+    relative_value_up = a[slice_up]/a[slice_down]
+    relative_value_down = a[slice_down] / a[slice_up]
 
     # Compute if neighbour condition is validated for up and down
-    neighbour_condition_up = np.logical_and(relative_difference_up > relative_threshold, relative_difference_up < (1./relative_threshold))
-    neighbour_condition_down = np.logical_and(relative_difference_down > relative_threshold, relative_difference_down < (1./relative_threshold))
+    neighbour_condition_up = np.logical_and(relative_value_up > relative_threshold, relative_value_up < (1./relative_threshold))
+    neighbour_condition_down = np.logical_and(relative_value_down > relative_threshold, relative_value_down < (1./relative_threshold))
 
     # Compute for each case the number of time the condition is valid
-    count_neighbour_condition_valid[slice_up] += neighbour_condition_up.astype(np.int8)
-    count_neighbour_condition_valid[slice_down] += neighbour_condition_down.astype(np.int8)
+    count_neighbour_condition_valid[slice_up] += neighbour_condition_up.astype(np.uint8)
+    count_neighbour_condition_valid[slice_down] += neighbour_condition_down.astype(np.uint8)
 
     return count_neighbour_condition_valid
