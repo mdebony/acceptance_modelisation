@@ -452,7 +452,8 @@ class BaseAcceptanceMapCreator(ABC):
 
             if norm_background < 0.:
                 logger.error(
-                    'Invalid normalisation value for run ' + str(id_observation) + ' : ' + str(norm_background))
+                    'Invalid normalisation value for run ' + str(id_observation) + ' : ' + str(norm_background) + ', normalisation set back to 1')
+                norm_background = 1.
             elif norm_background > 1.5 or norm_background < 0.5:
                 logger.warning(
                     'High correction of the background normalisation for run ' + str(id_observation) + ' : ' + str(
