@@ -123,9 +123,12 @@ class BaseAcceptanceMapCreator(ABC):
         # Store interpolation parameters
         self.threshold_value_log_interpolation = np.finfo(np.float64).tiny
         self.interpolation_type = interpolation_type
+
+        # Store cleaning parameters for models created from interpolation
         self.activate_interpolation_cleaning = activate_interpolation_cleaning
         self.interpolation_cleaning_energy_relative_threshold = interpolation_cleaning_energy_relative_threshold
         self.interpolation_cleaning_spatial_relative_threshold = interpolation_cleaning_spatial_relative_threshold
+        self.max_cleaning_iteration = 50
 
         # Store mini irf computation parameters
         self.use_mini_irf_computation = use_mini_irf_computation
@@ -452,7 +455,8 @@ class BaseAcceptanceMapCreator(ABC):
 
             if norm_background < 0.:
                 logger.error(
-                    'Invalid normalisation value for run ' + str(id_observation) + ' : ' + str(norm_background) + ', normalisation set back to 1')
+                    'Invalid normalisation value for run ' + str(id_observation) + ' : ' + str(
+                        norm_background) + ', normalisation set back to 1')
                 norm_background = 1.
             elif norm_background > 1.5 or norm_background < 0.5:
                 logger.warning(
@@ -630,7 +634,7 @@ class BaseAcceptanceMapCreator(ABC):
         logger.info(f"cos zenith bin centers: {list(np.round(bin_center, 2))}")
         logger.info(f"observation per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0])}")
         logger.info(f"livetime per bin [s]: " +
-                     f"{list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations)[0].astype(int))}")
+                    f"{list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations)[0].astype(int))}")
         if per_wobble:
             wobble_observations_bool_arr = [(np.array(wobble_observations.tolist()) == wobble) for wobble in
                                             np.unique(np.array(wobble_observations))]
@@ -762,7 +766,8 @@ class BaseAcceptanceMapCreator(ABC):
             data_cube[i] = binned_model[i].data * binned_model[i].unit
         if self.interpolation_type == 'log':
             interp_func = interp1d(x=cos_zenith_model,
-                                   y=np.log10(data_cube.to_value(binned_model[0].unit) + self.threshold_value_log_interpolation),
+                                   y=np.log10(data_cube.to_value(
+                                       binned_model[0].unit) + self.threshold_value_log_interpolation),
                                    axis=0,
                                    fill_value='extrapolate')
         elif self.interpolation_type == 'linear':
@@ -774,6 +779,41 @@ class BaseAcceptanceMapCreator(ABC):
             raise Exception("Unknown interpolation type")
 
         return interp_func
+
+    def _background_cleaning(self, background_model):
+        """
+            Is cleaning the background model from suspicious values not compatible with neighbour pixels.
+
+            Parameters
+            ----------
+            background_model : numpy.array
+                The background model to be cleaned
+
+            Returns
+            -------
+            background_model : numpy.array
+                The background model cleaned
+        """
+
+        base_model = background_model.copy()
+        final_model = background_model.copy()
+        i = 0
+        while (i < 1 or not np.allclose(base_model, final_model)) and (i < self.max_cleaning_iteration):
+            base_model = final_model.copy()
+            count_valid_neighbour_condition_energy = compute_neighbour_condition_validation(base_model, axis=0,
+                                                                                            relative_threshold=self.interpolation_cleaning_energy_relative_threshold)
+            count_valid_neighbour_condition_spatial = compute_neighbour_condition_validation(base_model, axis=1,
+                                                                                             relative_threshold=self.interpolation_cleaning_spatial_relative_threshold)
+            if base_model.ndim == 3:
+                count_valid_neighbour_condition_spatial += compute_neighbour_condition_validation(base_model, axis=2,
+                                                                                                  relative_threshold=self.interpolation_cleaning_spatial_relative_threshold)
+
+            mask_energy = count_valid_neighbour_condition_energy > 0
+            mask_neighbour = count_valid_neighbour_condition_spatial > (1 if base_model.ndim == 3 else 0)
+            mask_valid = np.logical_and(mask_energy, mask_neighbour)
+            final_model[~mask_valid] = 0.
+
+        return final_model
 
     def _get_interpolated_background(self, interp_func: interp1d, zenith: u.Quantity) -> np.array:
         """
@@ -801,13 +841,7 @@ class BaseAcceptanceMapCreator(ABC):
             raise Exception("Unknown interpolation type")
 
         if self.activate_interpolation_cleaning:
-            count_valid_neighbour_condition_energy = compute_neighbour_condition_validation(interp_bkg, axis=0, relative_threshold=self.interpolation_cleaning_energy_relative_threshold)
-            count_valid_neighbour_condition_spatial = compute_neighbour_condition_validation(interp_bkg, axis=1, relative_threshold=self.interpolation_cleaning_spatial_relative_threshold)
-            if interp_bkg.ndim == 3:
-                count_valid_neighbour_condition_spatial += compute_neighbour_condition_validation(interp_bkg, axis=2, relative_threshold=self.interpolation_cleaning_spatial_relative_threshold)
-
-            mask_valid = np.logical_and(count_valid_neighbour_condition_energy > 0, count_valid_neighbour_condition_spatial > 1)
-            interp_bkg[~mask_valid] = 0.
+            interp_bkg = self._background_cleaning(interp_bkg)
 
         return interp_bkg
 
@@ -869,7 +903,8 @@ class BaseAcceptanceMapCreator(ABC):
 
                     data_obs_all = np.zeros(tuple([len(evaluation_time), ] + list(template_model.data.shape)))
                     for i in range(len(evaluation_time)):
-                        data_obs_bin = self._get_interpolated_background(interp_func, obs.get_pointing_altaz(evaluation_time[i]).zen)
+                        data_obs_bin = self._get_interpolated_background(interp_func,
+                                                                         obs.get_pointing_altaz(evaluation_time[i]).zen)
                         data_obs_all[i, :, :] = data_obs_bin
 
                     data_obs = generate_irf_from_mini_irf(data_obs_all, observation_time)
