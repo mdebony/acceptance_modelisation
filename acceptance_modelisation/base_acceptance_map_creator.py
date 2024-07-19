@@ -699,8 +699,7 @@ class BaseAcceptanceMapCreator(ABC):
             else:
                 cos_zenith_observation = np.cos(obs.get_pointing_altaz(obs.tmid).zen)
                 key_closest_model = key_model[(np.abs(cos_zenith_model - cos_zenith_observation)).argmin()]
-                selected_model = dict_binned_model[key_closest_model]
-                acceptance_map[obs.obs_id] = selected_model
+                acceptance_map[obs.obs_id] = dict_binned_model[key_closest_model]
 
         return acceptance_map
 
