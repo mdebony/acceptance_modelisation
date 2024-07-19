@@ -10,8 +10,8 @@ from astropy.coordinates.erfa_astrom import erfa_astrom, ErfaAstromInterpolator
 from astropy.time import Time
 from gammapy.data import Observations, Observation
 from gammapy.datasets import MapDataset
-from gammapy.irf import Background2D, Background3D
-from gammapy.irf.background import BackgroundIRF
+from gammapy.irf import FoVAlignment
+from gammapy.irf.background import BackgroundIRF, Background2D, Background3D
 from gammapy.makers import MapDatasetMaker, SafeMaskMaker, FoVBackgroundMaker
 from gammapy.maps import WcsNDMap, WcsGeom, Map, MapAxis, RegionGeom
 from regions import CircleSkyRegion, SkyRegion
@@ -691,7 +691,8 @@ class BaseAcceptanceMapCreator(ABC):
                                                               data=data_obs)
                 elif type(dict_binned_model[key_model[0]]) is Background3D:
                     acceptance_map[obs.obs_id] = Background3D(axes=dict_binned_model[key_model[0]].axes,
-                                                              data=data_obs)
+                                                              data=data_obs,
+                                                              fov_alignment=FoVAlignment.ALTAZ)
                 else:
                     raise Exception('Unknown background format')
 
