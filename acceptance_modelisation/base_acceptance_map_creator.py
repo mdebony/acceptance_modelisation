@@ -68,7 +68,7 @@ class BaseAcceptanceMapCreator(ABC):
         max_fraction_pixel_rotation_fov : float, optional
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
         time_resolution : astropy.units.Quantity, optional
-            Time resolution to use for the computation of the rotation of the FoV and cut as function of the zenith binsV
+            Time resolution to use for the computation of the rotation of the FoV and cut as function of the zenith bins
         use_mini_irf_computation : bool, optional
             If true, during zenith interpolation and binning will compute first mini irf for each part of the run before averaging them.
             Should improve the accuracy of the model, especially at high zenith angle. Actiate it could singificantly increase computation time.
