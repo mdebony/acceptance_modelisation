@@ -1,7 +1,7 @@
 import copy
 import logging
 from abc import ABC, abstractmethod
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Union
 
 import astropy.units as u
 import numpy as np
@@ -794,7 +794,7 @@ class BaseAcceptanceMapCreator(ABC):
                                               zenith_interpolation: bool = False,
                                               runwise_normalisation: bool = True,
                                               off_observations: Observations = None,
-                                              base_model: BackgroundCollectionZenith | BackgroundIRF = None,
+                                              base_model: Union[BackgroundCollectionZenith, BackgroundIRF] = None,
                                               ) -> dict[int, BackgroundIRF]:
         """
         Calculate an acceptance map with the norm adjusted for each run
