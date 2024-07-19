@@ -108,12 +108,11 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                          cos_zenith_binning_parameter_value=cos_zenith_binning_parameter_value,
                          initial_cos_zenith_binning=initial_cos_zenith_binning,
                          max_angular_separation_wobble=max_angular_separation_wobble,
-                         zenith_binning_run_splitting = zenith_binning_run_splitting,
+                         zenith_binning_run_splitting=zenith_binning_run_splitting,
                          max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
                          time_resolution=time_resolution,
                          use_mini_irf_computation=use_mini_irf_computation,
                          mini_irf_time_resolution=mini_irf_time_resolution)
-
 
     def fit_background(self, count_map, exp_map_total, exp_map):
         centers = self.offset_axis.center.to_value(u.deg)

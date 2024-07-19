@@ -72,8 +72,8 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
                          initial_cos_zenith_binning=initial_cos_zenith_binning,
                          max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
                          max_angular_separation_wobble=max_angular_separation_wobble,
-                         zenith_binning_run_splitting = zenith_binning_run_splitting,
-                         time_resolution = time_resolution,
+                         zenith_binning_run_splitting=zenith_binning_run_splitting,
+                         time_resolution=time_resolution,
                          use_mini_irf_computation=use_mini_irf_computation,
                          mini_irf_time_resolution=mini_irf_time_resolution)
 
