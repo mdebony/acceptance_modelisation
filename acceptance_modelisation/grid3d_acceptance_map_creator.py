@@ -73,8 +73,9 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         fit_bounds: dict, can optionally be None if using a built-in function
             Bounds of the parameters of the function to fit. Normalisation parameter is ignored if given.
         use_mini_irf_computation : bool, optional
-            If true, during zenith interpolation and binning will compute first a mini irf for each part of the run before averaging them.
-            Should improve the accuracy of the model, especially at high zenith angle. Activate it could significantly increase computation time.
+            If true, in case the case of zenith interpolation or binning, each run will be divided in small subrun (the slicing is based on time).
+            A model will be computed for each sub run before averaging them to obtain the final model for the run.
+            Should improve the accuracy of the model, especially at high zenith angle.
         mini_irf_time_resolution : astropy.units.Quantity, optional
             Time resolution to use for mini irf used for computation of the final background model
         """
