@@ -55,8 +55,8 @@ class BaseRadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
         time_resolution : astropy.units.Quantity, optional
             Time resolution to use for the computation of the rotation of the FoV and cut as function of the zenith bins
         use_mini_irf_computation : bool, optional
-            If true, during zenith interpolation and binning will compute first mini irf for each part of the run before averaging them.
-            Should improve the accuracy of the model, especially at high zenith angle. Actiate it could singificantly increase computation time.
+            If true, during zenith interpolation and binning will compute first a mini irf for each part of the run before averaging them.
+            Should improve the accuracy of the model, especially at high zenith angle. Activate it could significantly increase computation time.
         mini_irf_time_resolution : astropy.units.Quantity, optional
             Time resolution to use for mini irf used for computation of the final background model
         """
