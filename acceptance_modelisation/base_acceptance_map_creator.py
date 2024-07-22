@@ -919,7 +919,8 @@ class BaseAcceptanceMapCreator(ABC):
                                                               data=data_obs * template_model.unit)
                 elif type(template_model) is Background3D:
                     acceptance_map[obs.obs_id] = Background3D(axes=template_model.axes,
-                                                              data=data_obs * template_model.unit)
+                                                              data=data_obs * template_model.unit,
+                                                              fov_alignment=FoVAlignment.ALTAZ)
                 else:
                     raise Exception('Unknown background format')
 
