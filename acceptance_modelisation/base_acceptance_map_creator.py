@@ -836,7 +836,7 @@ class BaseAcceptanceMapCreator(ABC):
 
         if self.interpolation_type == 'log':
             interp_bkg = (10. ** interp_func(np.cos(zenith)))
-            interp_bkg[interp_bkg < 1000 * self.threshold_value_log_interpolation] = 0.
+            interp_bkg[interp_bkg < 100 * self.threshold_value_log_interpolation] = 0.
         elif self.interpolation_type == 'linear':
             interp_bkg = interp_func(np.cos(zenith))
         else:
