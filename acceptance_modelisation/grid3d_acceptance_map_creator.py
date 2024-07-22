@@ -4,7 +4,7 @@ from typing import List, Optional
 import astropy.units as u
 import numpy as np
 from gammapy.data import Observations
-from gammapy.irf import Background3D, FoVAlignment
+from gammapy.irf import FoVAlignment, Background3D
 from gammapy.maps import MapAxis
 from iminuit import Minuit
 from regions import SkyRegion
@@ -29,6 +29,8 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                  zenith_binning_run_splitting: bool = False,
                  max_fraction_pixel_rotation_fov: float = 0.5,
                  time_resolution: u.Quantity = 0.1 * u.s,
+                 use_mini_irf_computation: bool = False,
+                 mini_irf_time_resolution: u.Quantity = 1. * u.min,
                  method='stack',
                  fit_fnc='gaussian2d',
                  fit_seeds=None,
@@ -70,6 +72,12 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
             Seeds of the parameters of the function to fit. Normalisation parameter is ignored if given.
         fit_bounds: dict, can optionally be None if using a built-in function
             Bounds of the parameters of the function to fit. Normalisation parameter is ignored if given.
+        use_mini_irf_computation : bool, optional
+            If true, in case the case of zenith interpolation or binning, each run will be divided in small subrun (the slicing is based on time).
+            A model will be computed for each sub run before averaging them to obtain the final model for the run.
+            Should improve the accuracy of the model, especially at high zenith angle.
+        mini_irf_time_resolution : astropy.units.Quantity, optional
+            Time resolution to use for mini irf used for computation of the final background model
         """
 
         # If no exclusion region, default it as an empty list
@@ -103,7 +111,9 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                          max_angular_separation_wobble=max_angular_separation_wobble,
                          zenith_binning_run_splitting=zenith_binning_run_splitting,
                          max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
-                         time_resolution=time_resolution)
+                         time_resolution=time_resolution,
+                         use_mini_irf_computation=use_mini_irf_computation,
+                         mini_irf_time_resolution=mini_irf_time_resolution)
 
     def fit_background(self, count_map, exp_map_total, exp_map):
         centers = self.offset_axis.center.to_value(u.deg)

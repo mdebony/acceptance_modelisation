@@ -221,6 +221,26 @@ acceptance_models = acceptance_model_creator.create_acceptance_map_per_observati
                                                                                    zenith_interpolation=True)
 ```
 
+## Compute background model with a higher time resolution than the observation run
+
+If the background evolve quickly, like at high zenith angle, you could compute in the case of zenith binned or interpolated background the model at a smaller time scale than the observation run. The background model for the run will then correspond to the average of all the model computed for each part of the run.
+It should improve accuracy of the model at the expanse of a larger compute time.
+For this you need to set `use_mini_irf_computation = True` and you could control the time resolution used for computation with the parameter `mini_irf_time_resolution`.
+
+```python
+acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
+                                                      offset_axis_acceptance,
+                                                      exclude_regions=exclude_regions,
+                                                      oversample_map=10,
+                                                      min_run_per_cos_zenith_bin=3,
+                                                      initial_cos_zenith_binning=0.01,
+                                                      use_mini_irf_computation = True,
+                                                      mini_irf_time_resolution = 1. * u.min)
+acceptance_models = acceptance_model_creator.create_acceptance_map_per_observation(obs_collection,
+                                                                                   zenith_binning=True,
+                                                                                   zenith_interpolation=True)
+```
+
 # Available model
 
 All models have an identical interface. You just need to change the class used to change the model created.
