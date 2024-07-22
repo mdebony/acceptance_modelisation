@@ -10,8 +10,8 @@ from astropy.coordinates.erfa_astrom import erfa_astrom, ErfaAstromInterpolator
 from astropy.time import Time
 from gammapy.data import Observations, Observation
 from gammapy.datasets import MapDataset
-from gammapy.irf import FoVAlignment
-from gammapy.irf.background import BackgroundIRF, Background2D, Background3D
+from gammapy.irf import FoVAlignment, Background2D, Background3D
+from gammapy.irf.background import BackgroundIRF
 from gammapy.makers import MapDatasetMaker, SafeMaskMaker, FoVBackgroundMaker
 from gammapy.maps import WcsNDMap, WcsGeom, Map, MapAxis, RegionGeom
 from regions import CircleSkyRegion, SkyRegion
