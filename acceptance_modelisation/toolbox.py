@@ -138,12 +138,8 @@ def generate_irf_from_mini_irf(data_cube: np.array, observation_time: u.Quantity
     scale_factor_per_bin = (observation_time / np.sum(observation_time)).to_value(u.dimensionless_unscaled)
 
     # Reshape the scale factor in order to be able to multiply it to the data cube
-    shape_data_cube = list(data_cube.shape)
-    for i in range(len(shape_data_cube)):
-        if i != 0:
-            shape_data_cube[i] = 1
-    shape_data_cube = tuple(shape_data_cube)
-    scale_factor_per_bin_reshaped = scale_factor_per_bin.reshape(shape_data_cube)
+    scale_factor_per_bin_reshaped = scale_factor_per_bin.reshape(
+        (scale_factor_per_bin.size, *[1 for _ in range(data_cube.ndim - 1)]))
 
     # Compute the weighted average of all mini irfs
     data_cube_final = np.sum(data_cube * scale_factor_per_bin_reshaped, axis=0)
