@@ -4,7 +4,8 @@ from typing import List, Optional
 import astropy.units as u
 import numpy as np
 from gammapy.data import Observations
-from gammapy.irf import Background3D, FoVAlignment
+from gammapy.irf import FoVAlignment
+from gammapy.irf.background import Background3D
 from gammapy.maps import MapAxis
 from iminuit import Minuit
 from regions import SkyRegion

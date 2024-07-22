@@ -3,7 +3,7 @@ from typing import List, Optional
 import astropy.units as u
 import numpy as np
 from gammapy.data import Observations
-from gammapy.irf import Background2D
+from gammapy.irf.background import Background2D
 from gammapy.maps import MapAxis
 from regions import CircleAnnulusSkyRegion, CircleSkyRegion, SkyRegion
 
