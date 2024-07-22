@@ -670,6 +670,10 @@ class BaseAcceptanceMapCreator(ABC):
             key_model.append(k)
         cos_zenith_model = np.array(cos_zenith_model)
 
+        # Determine model type and axes
+        type_model = type(dict_binned_model[key_model[0]])
+        axes_model = dict_binned_model[key_model[0]].axes
+
         # Find the closest model for each observation and associate it to each observation
         acceptance_map = {}
         if len(cos_zenith_model) <= 1:
@@ -687,11 +691,11 @@ class BaseAcceptanceMapCreator(ABC):
 
                 data_obs = generate_irf_from_mini_irf(data_obs_all, observation_time)
 
-                if type(dict_binned_model[key_model[0]]) is Background2D:
-                    acceptance_map[obs.obs_id] = Background2D(axes=dict_binned_model[key_model[0]].axes,
+                if type_model is Background2D:
+                    acceptance_map[obs.obs_id] = Background2D(axes=axes_model,
                                                               data=data_obs)
-                elif type(dict_binned_model[key_model[0]]) is Background3D:
-                    acceptance_map[obs.obs_id] = Background3D(axes=dict_binned_model[key_model[0]].axes,
+                elif type_model is Background3D:
+                    acceptance_map[obs.obs_id] = Background3D(axes=axes_model,
                                                               data=data_obs,
                                                               fov_alignment=FoVAlignment.ALTAZ)
                 else:
