@@ -884,13 +884,6 @@ class BaseAcceptanceMapCreator(ABC):
             raise BackgroundModelFormatException(error_message)
         dict_binned_model = base_model or self.create_model_cos_zenith_binned(off_observations)
 
-        binned_model = []
-        cos_zenith_model = []
-        for k in np.sort(list(dict_binned_model.keys())):
-            binned_model.append(dict_binned_model[k])
-            cos_zenith_model.append(np.cos(np.deg2rad(k)))
-        cos_zenith_model = np.array(cos_zenith_model)
-
         acceptance_map = {}
         if len(dict_binned_model) <= 1:
             logger.warning('Only one zenith bin, zenith interpolation deactivated')
