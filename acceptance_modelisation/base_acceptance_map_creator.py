@@ -20,8 +20,11 @@ from scipy.interpolate import interp1d
 
 from .bkg_collection import BackgroundCollectionZenith
 from .exception import BackgroundModelFormatException
-from .toolbox import compute_rotation_speed_fov, get_unique_wobble_pointings, get_time_mini_irf, \
-    generate_irf_from_mini_irf, compute_neighbour_condition_validation
+from .toolbox import (compute_rotation_speed_fov,
+                      get_unique_wobble_pointings,
+                      get_time_mini_irf,
+                      generate_irf_from_mini_irf,
+                      compute_neighbour_condition_validation)
 
 logger = logging.getLogger(__name__)
 
