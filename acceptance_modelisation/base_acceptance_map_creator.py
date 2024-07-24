@@ -893,13 +893,19 @@ class BaseAcceptanceMapCreator(ABC):
             for obs in observations:
                 acceptance_map[obs.obs_id] = dict_binned_model[dict_binned_model.zenith[0]]
         else:
-            template_model = dict_binned_model[dict_binned_model.zenith[0]]
+            # Determine model properties
+            type_model = type(dict_binned_model[dict_binned_model.zenith[0]])
+            axes_model = dict_binned_model[dict_binned_model.zenith[0]].axes
+            shape_model = dict_binned_model[dict_binned_model.zenith[0]].data.shape
+            unit_model = dict_binned_model[dict_binned_model.zenith[0]].unit
+
+            # Perform the interpolation
             interp_func = self._create_interpolation_function(dict_binned_model)
             for obs in observations:
                 if self.use_mini_irf_computation:
                     evaluation_time, observation_time = get_time_mini_irf(obs, self.mini_irf_time_resolution)
 
-                    data_obs_all = np.zeros(tuple([len(evaluation_time), ] + list(template_model.data.shape)))
+                    data_obs_all = np.zeros(tuple([len(evaluation_time), ] + list(shape_model)))
                     for i in range(len(evaluation_time)):
                         data_obs_bin = self._get_interpolated_background(interp_func,
                                                                          obs.get_pointing_altaz(evaluation_time[i]).zen)
@@ -910,12 +916,12 @@ class BaseAcceptanceMapCreator(ABC):
                 else:
                     data_obs = self._get_interpolated_background(interp_func, obs.get_pointing_altaz(obs.tmid).zen)
 
-                if type(template_model) is Background2D:
-                    acceptance_map[obs.obs_id] = Background2D(axes=template_model.axes,
-                                                              data=data_obs * template_model.unit)
-                elif type(template_model) is Background3D:
-                    acceptance_map[obs.obs_id] = Background3D(axes=template_model.axes,
-                                                              data=data_obs * template_model.unit,
+                if type_model is Background2D:
+                    acceptance_map[obs.obs_id] = Background2D(axes=axes_model,
+                                                              data=data_obs * unit_model)
+                elif type_model is Background3D:
+                    acceptance_map[obs.obs_id] = Background3D(axes=axes_model,
+                                                              data=data_obs * unit_model,
                                                               fov_alignment=FoVAlignment.ALTAZ)
                 else:
                     raise Exception('Unknown background format')
