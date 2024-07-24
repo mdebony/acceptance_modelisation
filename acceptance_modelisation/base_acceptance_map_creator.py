@@ -20,7 +20,11 @@ from scipy.interpolate import interp1d
 
 from .bkg_collection import BackgroundCollectionZenith
 from .exception import BackgroundModelFormatException
-from .toolbox import compute_rotation_speed_fov, get_unique_wobble_pointings, get_time_mini_irf, generate_irf_from_mini_irf
+from .toolbox import (compute_rotation_speed_fov,
+                      get_unique_wobble_pointings,
+                      get_time_mini_irf,
+                      generate_irf_from_mini_irf,
+                      compute_neighbour_condition_validation)
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +44,11 @@ class BaseAcceptanceMapCreator(ABC):
                  max_fraction_pixel_rotation_fov: float = 0.5,
                  time_resolution: u.Quantity = 0.1 * u.s,
                  use_mini_irf_computation: bool = False,
-                 mini_irf_time_resolution: u.Quantity = 1. * u.min) -> None:
+                 mini_irf_time_resolution: u.Quantity = 1. * u.min,
+                 interpolation_type: str = 'linear',
+                 activate_interpolation_cleaning: bool = False,
+                 interpolation_cleaning_energy_relative_threshold: float = 1e-4,
+                 interpolation_cleaning_spatial_relative_threshold: float = 1e-2) -> None:
         """
         Create the class for calculating radial acceptance model.
 
@@ -75,6 +83,14 @@ class BaseAcceptanceMapCreator(ABC):
             Should improve the accuracy of the model, especially at high zenith angle.
         mini_irf_time_resolution : astropy.units.Quantity, optional
             Time resolution to use for mini irf used for computation of the final background model
+        interpolation_type: str, optional
+            Select the type of interpolation to be used, could be either "log" or "linear", log tend to provided better results be could more easily create artefact that will cause issue
+        activate_interpolation_cleaning: bool, optional
+            If true, will activate the cleaning step after interpolation, it should help to eliminate artefact caused by interpolation
+        interpolation_cleaning_energy_relative_threshold: float, optional
+            To be considered value, the bin in energy need at least one adjacent bin with a relative difference within this range
+        interpolation_cleaning_spatial_relative_threshold: float, optional
+            To be considered value, the bin in space need at least one adjacent bin with a relative difference within this range
         """
 
         # If no exclusion region, default it as an empty list
@@ -85,10 +101,6 @@ class BaseAcceptanceMapCreator(ABC):
         self.energy_axis = energy_axis
         self.max_offset = max_offset
         self.exclude_regions = exclude_regions
-        self.cos_zenith_binning_method = cos_zenith_binning_method
-        self.cos_zenith_binning_parameter_value = cos_zenith_binning_parameter_value
-        self.initial_cos_zenith_binning = initial_cos_zenith_binning
-        self.max_angular_separation_wobble = max_angular_separation_wobble
 
         # Calculate map parameter
         self.n_bins_map = 2 * int(np.rint((self.max_offset / spatial_resolution).to(u.dimensionless_unscaled)))
@@ -104,6 +116,22 @@ class BaseAcceptanceMapCreator(ABC):
         self.max_fraction_pixel_rotation_fov = max_fraction_pixel_rotation_fov
         self.time_resolution = time_resolution
         self.zenith_binning_run_splitting = zenith_binning_run_splitting
+
+        # Store zenith binning parameters
+        self.cos_zenith_binning_method = cos_zenith_binning_method
+        self.cos_zenith_binning_parameter_value = cos_zenith_binning_parameter_value
+        self.initial_cos_zenith_binning = initial_cos_zenith_binning
+        self.max_angular_separation_wobble = max_angular_separation_wobble
+
+        # Store interpolation parameters
+        self.threshold_value_log_interpolation = np.finfo(np.float64).tiny
+        self.interpolation_type = interpolation_type
+
+        # Store cleaning parameters for models created from interpolation
+        self.activate_interpolation_cleaning = activate_interpolation_cleaning
+        self.interpolation_cleaning_energy_relative_threshold = interpolation_cleaning_energy_relative_threshold
+        self.interpolation_cleaning_spatial_relative_threshold = interpolation_cleaning_spatial_relative_threshold
+        self.max_cleaning_iteration = 50
 
         # Store mini irf computation parameters
         self.use_mini_irf_computation = use_mini_irf_computation
@@ -430,7 +458,9 @@ class BaseAcceptanceMapCreator(ABC):
 
             if norm_background < 0.:
                 logger.error(
-                    'Invalid normalisation value for run ' + str(id_observation) + ' : ' + str(norm_background))
+                    'Invalid normalisation value for run ' + str(id_observation) + ' : ' + str(
+                        norm_background) + ', normalisation set back to 1')
+                norm_background = 1.
             elif norm_background > 1.5 or norm_background < 0.5:
                 logger.warning(
                     'High correction of the background normalisation for run ' + str(id_observation) + ' : ' + str(
@@ -607,7 +637,7 @@ class BaseAcceptanceMapCreator(ABC):
         logger.info(f"cos zenith bin centers: {list(np.round(bin_center, 2))}")
         logger.info(f"observation per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0])}")
         logger.info(f"livetime per bin [s]: " +
-                     f"{list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations)[0].astype(int))}")
+                    f"{list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations)[0].astype(int))}")
         if per_wobble:
             wobble_observations_bool_arr = [(np.array(wobble_observations.tolist()) == wobble) for wobble in
                                             np.unique(np.array(wobble_observations))]
@@ -682,7 +712,9 @@ class BaseAcceptanceMapCreator(ABC):
             if self.use_mini_irf_computation:
                 evaluation_time, observation_time = get_time_mini_irf(obs, self.mini_irf_time_resolution)
 
-                data_obs_all = np.zeros(tuple([len(evaluation_time), ] + list(dict_binned_model[key_model[0]].data.shape))) * dict_binned_model[key_model[0]].unit
+                data_obs_all = np.zeros(
+                    tuple([len(evaluation_time), ] + list(dict_binned_model[key_model[0]].data.shape))) * \
+                               dict_binned_model[key_model[0]].unit
                 for i in range(len(evaluation_time)):
                     cos_zenith_observation = np.cos(obs.get_pointing_altaz(evaluation_time[i]).zen)
                     key_closest_model = key_model[(np.abs(cos_zenith_model - cos_zenith_observation)).argmin()]
@@ -707,6 +739,116 @@ class BaseAcceptanceMapCreator(ABC):
                 acceptance_map[obs.obs_id] = dict_binned_model[key_closest_model]
 
         return acceptance_map
+
+    def _create_interpolation_function(self, base_model: BackgroundCollectionZenith) -> interp1d:
+        """
+            Create the function that will perform the interpolation
+
+            Parameters
+            ----------
+            base_model : dict of gammapy.irf.background.BackgroundIRF
+                The binned base model
+                Each key of the dictionary should correspond to the zenith in degree of the model
+
+            Returns
+            -------
+            interp_func : scipy.interpolate.interp1d
+                The object that could be call directly for performing the interpolation
+        """
+
+        # Reshape the base model
+        binned_model = []
+        cos_zenith_model = []
+        for k in np.sort(list(base_model.keys())):
+            binned_model.append(base_model[k])
+            cos_zenith_model.append(np.cos(np.deg2rad(k)))
+        cos_zenith_model = np.array(cos_zenith_model)
+
+        data_cube = np.zeros(tuple([len(binned_model), ] + list(binned_model[0].data.shape))) * binned_model[0].unit
+        for i in range(len(binned_model)):
+            data_cube[i] = binned_model[i].data * binned_model[i].unit
+        if self.interpolation_type == 'log':
+            interp_func = interp1d(x=cos_zenith_model,
+                                   y=np.log10(data_cube.to_value(
+                                       binned_model[0].unit) + self.threshold_value_log_interpolation),
+                                   axis=0,
+                                   fill_value='extrapolate')
+        elif self.interpolation_type == 'linear':
+            interp_func = interp1d(x=cos_zenith_model,
+                                   y=data_cube.to_value(binned_model[0].unit),
+                                   axis=0,
+                                   fill_value='extrapolate')
+        else:
+            raise Exception("Unknown interpolation type")
+
+        return interp_func
+
+    def _background_cleaning(self, background_model):
+        """
+            Is cleaning the background model from suspicious values not compatible with neighbour pixels.
+
+            Parameters
+            ----------
+            background_model : numpy.array
+                The background model to be cleaned
+
+            Returns
+            -------
+            background_model : numpy.array
+                The background model cleaned
+        """
+
+        base_model = background_model.copy()
+        final_model = background_model.copy()
+        i = 0
+        while (i < 1 or not np.allclose(base_model, final_model)) and (i < self.max_cleaning_iteration):
+            base_model = final_model.copy()
+            i += 1
+
+            count_valid_neighbour_condition_energy = compute_neighbour_condition_validation(base_model, axis=0,
+                                                                                            relative_threshold=self.interpolation_cleaning_energy_relative_threshold)
+            count_valid_neighbour_condition_spatial = compute_neighbour_condition_validation(base_model, axis=1,
+                                                                                             relative_threshold=self.interpolation_cleaning_spatial_relative_threshold)
+            if base_model.ndim == 3:
+                count_valid_neighbour_condition_spatial += compute_neighbour_condition_validation(base_model, axis=2,
+                                                                                                  relative_threshold=self.interpolation_cleaning_spatial_relative_threshold)
+
+            mask_energy = count_valid_neighbour_condition_energy > 0
+            mask_spatial = count_valid_neighbour_condition_spatial > (1 if base_model.ndim == 3 else 0)
+            mask_valid = np.logical_and(mask_energy, mask_spatial)
+            final_model[~mask_valid] = 0.
+
+        return final_model
+
+    def _get_interpolated_background(self, interp_func: interp1d, zenith: u.Quantity) -> np.array:
+        """
+            Create the function that will perform the interpolation
+
+            Parameters
+            ----------
+            interp_func : scipy.interpolate.interp1d
+                The interpolation function
+            zenith : u.Quantity
+                The zenith for which the interpolated background should be created
+
+            Returns
+            -------
+            interp_bkg : numpy.array
+                The object that could be call directly for performing the interpolation
+        """
+
+        if self.interpolation_type == 'log':
+            interp_bkg = (10. ** interp_func(np.cos(zenith)))
+            interp_bkg[interp_bkg < 100 * self.threshold_value_log_interpolation] = 0.
+        elif self.interpolation_type == 'linear':
+            interp_bkg = interp_func(np.cos(zenith))
+        else:
+            raise Exception("Unknown interpolation type")
+
+        if self.activate_interpolation_cleaning:
+            interp_bkg = self._background_cleaning(interp_bkg)
+
+        return interp_bkg
 
     def create_acceptance_map_cos_zenith_interpolated(self,
                                                       observations: Observations,
@@ -745,49 +887,42 @@ class BaseAcceptanceMapCreator(ABC):
             raise BackgroundModelFormatException(error_message)
         dict_binned_model = base_model or self.create_model_cos_zenith_binned(off_observations)
 
-        binned_model = []
-        cos_zenith_model = []
-        for k in np.sort(list(dict_binned_model.keys())):
-            binned_model.append(dict_binned_model[k])
-            cos_zenith_model.append(np.cos(np.deg2rad(k)))
-        cos_zenith_model = np.array(cos_zenith_model)
-
         acceptance_map = {}
-        if len(binned_model) <= 1:
+        if len(dict_binned_model) <= 1:
             logger.warning('Only one zenith bin, zenith interpolation deactivated')
             for obs in observations:
-                acceptance_map[obs.obs_id] = binned_model[0]
+                acceptance_map[obs.obs_id] = dict_binned_model[dict_binned_model.zenith[0]]
         else:
-            data_cube = np.zeros(tuple([len(binned_model), ] + list(binned_model[0].data.shape))) * binned_model[0].unit
-            for i in range(len(binned_model)):
-                data_cube[i] = binned_model[i].data * binned_model[i].unit
-            threshold_value = np.finfo(np.float64).tiny
-            interp_func = interp1d(x=cos_zenith_model,
-                                   y=np.log10(data_cube.value + threshold_value),
-                                   axis=0,
-                                   fill_value='extrapolate')
+            # Determine model properties
+            type_model = type(dict_binned_model[dict_binned_model.zenith[0]])
+            axes_model = dict_binned_model[dict_binned_model.zenith[0]].axes
+            shape_model = dict_binned_model[dict_binned_model.zenith[0]].data.shape
+            unit_model = dict_binned_model[dict_binned_model.zenith[0]].unit
+
+            # Perform the interpolation
+            interp_func = self._create_interpolation_function(dict_binned_model)
             for obs in observations:
                 if self.use_mini_irf_computation:
                     evaluation_time, observation_time = get_time_mini_irf(obs, self.mini_irf_time_resolution)
 
-                    data_obs_all = np.zeros(tuple([len(evaluation_time), ] + list(binned_model[0].data.shape)))
+                    data_obs_all = np.zeros(tuple([len(evaluation_time), ] + list(shape_model)))
                     for i in range(len(evaluation_time)):
-                        data_obs_bin = (10. ** interp_func(np.cos(obs.get_pointing_altaz(evaluation_time[i]).zen)))
-                        data_obs_bin[data_obs_bin < 100 * threshold_value] = 0.
+                        data_obs_bin = self._get_interpolated_background(interp_func,
+                                                                         obs.get_pointing_altaz(evaluation_time[i]).zen)
                         data_obs_all[i, :, :] = data_obs_bin
 
                     data_obs = generate_irf_from_mini_irf(data_obs_all, observation_time)
 
                 else:
-                    data_obs = (10. ** interp_func(np.cos(obs.get_pointing_altaz(obs.tmid).zen)))
-                    data_obs[data_obs < 100 * threshold_value] = 0.
+                    data_obs = self._get_interpolated_background(interp_func, obs.get_pointing_altaz(obs.tmid).zen)
 
-                if type(binned_model[0]) is Background2D:
-                    acceptance_map[obs.obs_id] = Background2D(axes=binned_model[0].axes,
-                                                              data=data_obs * data_cube.unit)
-                elif type(binned_model[0]) is Background3D:
-                    acceptance_map[obs.obs_id] = Background3D(axes=binned_model[0].axes,
-                                                              data=data_obs * data_cube.unit)
+                if type_model is Background2D:
+                    acceptance_map[obs.obs_id] = Background2D(axes=axes_model,
+                                                              data=data_obs * unit_model)
+                elif type_model is Background3D:
+                    acceptance_map[obs.obs_id] = Background3D(axes=axes_model,
+                                                              data=data_obs * unit_model,
+                                                              fov_alignment=FoVAlignment.ALTAZ)
                 else:
                     raise Exception('Unknown background format')
 
