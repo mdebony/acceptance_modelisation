@@ -14,7 +14,7 @@ from gammapy.irf import FoVAlignment, Background2D, Background3D
 from gammapy.irf.background import BackgroundIRF
 from gammapy.makers import MapDatasetMaker, SafeMaskMaker, FoVBackgroundMaker
 from gammapy.maps import WcsNDMap, WcsGeom, Map, MapAxis, RegionGeom
-from regions import CircleSkyRegion, SkyRegion
+from regions import CircleSkyRegion, EllipseSkyRegion, SkyRegion
 from scipy.integrate import cumulative_trapezoid
 from scipy.interpolate import interp1d
 
@@ -215,6 +215,15 @@ class BaseAcceptanceMapCreator(ABC):
                                                               dec=center_coordinate_camera_frame.lat[0])
                 exclude_region_camera_frame.append(CircleSkyRegion(center=center_coordinate_camera_frame_arb,
                                                                    radius=region.radius))
+            elif isinstance(region, EllipseSkyRegion):
+                center_coordinate = region.center
+                center_coordinate_altaz = center_coordinate.transform_to(pointing_altaz)
+                center_coordinate_camera_frame = center_coordinate_altaz.transform_to(camera_frame)
+                center_coordinate_camera_frame_arb = SkyCoord(ra=center_coordinate_camera_frame.lon[0],
+                                                              dec=center_coordinate_camera_frame.lat[0])
+                exclude_region_camera_frame.append(EllipseSkyRegion(center=center_coordinate_camera_frame_arb,
+                                                                   width=region.width, height=region.height,
+                                                                   angle=region.angle))
             else:
                 raise Exception(f'{type(region)} region type not supported')
 
