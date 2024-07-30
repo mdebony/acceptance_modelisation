@@ -509,10 +509,11 @@ class BaseAcceptanceMapCreator(ABC):
         time_axis = np.linspace(obs.tstart, obs.tstop, num=n_bin)
 
         # Compute the zenith for each evaluation time
-        altaz_coordinates = obs.get_pointing_altaz(time_axis)
-        zenith_values = altaz_coordinates.zen
-        if np.any(zenith_values < np.min(edge_zenith_bin)) or np.any(zenith_values > np.max(edge_zenith_bin)):
-            logger.error('Run with zenith value outside of the considered range for zenith binning')
+        with erfa_astrom.set(ErfaAstromInterpolator(1000 * u.s)):
+            altaz_coordinates = obs.get_pointing_altaz(time_axis)
+            zenith_values = altaz_coordinates.zen
+            if np.any(zenith_values < np.min(edge_zenith_bin)) or np.any(zenith_values > np.max(edge_zenith_bin)):
+                logger.error('Run with zenith value outside of the considered range for zenith binning')
 
         # Split the time interval to transition between zenith bin
         id_bin = np.digitize(zenith_values, edge_zenith_bin)
