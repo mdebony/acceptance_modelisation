@@ -366,8 +366,10 @@ class BaseAcceptanceMapCreator(ABC):
         with erfa_astrom.set(ErfaAstromInterpolator(1000 * u.s)):
             for obs in observations:
                 # Filter events in exclusion regions
-                geom = RegionGeom.from_regions(self.exclude_regions)
-                mask = geom.contains(obs.events.radec)
+                mask = np.zeros(len(obs.events.table), dtype=bool)
+                for r in self.exclude_regions:
+                    geom_exclusion = RegionGeom.from_regions(r)
+                    mask |= geom_exclusion.contains(obs.events.radec)
                 obs._events = obs.events.select_row_subset(~mask)
                 # Create a count map in camera frame
                 camera_frame_obs = self._transform_obs_to_camera_frame(obs)
