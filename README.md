@@ -1,6 +1,7 @@
 # Description
 
 This package create acceptance model to be used for IACT analysis with gammapy
+acceptance_modelisation is licensed under the GNU Lesser General Public License (LGPL) v3.0.
 
 # Installation
 

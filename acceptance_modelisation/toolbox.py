@@ -1,3 +1,13 @@
+# -*- coding: utf-8 -*-
+# -------------------------------------------------------------------
+# Filename: toolbox.py
+# Purpose: Collection of basic functions for other part of the program
+#
+# This program is free software: you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+# ---------------------------------------------------------------------
+
+
 import astropy.units as u
 from astropy.coordinates import AltAz, SkyCoord, angular_separation
 from astropy.coordinates.earth import OMEGA_EARTH, EarthLocation
