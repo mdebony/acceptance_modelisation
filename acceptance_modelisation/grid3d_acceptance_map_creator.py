@@ -253,9 +253,10 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
 
         return acceptance_map
 
-    def _create_base_computation_map(self, observations: Observations) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Unit]:
+    def _create_base_computation_map(self, observations: Observations) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Quantity]:
         """
-        From a list of observations return a stacked finely binned counts and exposure map in camera frame to compute a model
+        From a list of observations return a stacked finely binned counts and exposure map in camera frame to compute a
+        model
 
         Parameters
         ----------
@@ -270,7 +271,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
             The exposure map corrected for exclusion regions
         exp_map_background_total : gammapy.map.WcsNDMap
             The exposure map without correction for exclusion regions
-        livetime : astropy.unit.Unit
+        livetime : astropy.unit.Quantity
             The total exposure time for the model
         """
         count_map_background = WcsNDMap(geom=self.geom)

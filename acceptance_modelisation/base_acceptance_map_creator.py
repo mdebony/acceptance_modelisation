@@ -357,6 +357,30 @@ class BaseAcceptanceMapCreator(ABC):
         """
         pass
 
+    def _create_base_computation_map(self, observations: Observation) -> Tuple:
+        """
+        Abstract method to calculate maps used in acceptance computation from a list of observations.
+
+        Subclasses must implement this method to provide the data used for calculating the acceptance map.
+
+        Parameters
+        ----------
+        observations : gammapy.data.observations.Observations
+            The collection of observations used to create the acceptance map.
+
+        Returns
+        -------
+        count_map_background : gammapy.map.WcsNDMap
+            The count map
+        exp_map_background : gammapy.map.WcsNDMap
+            The exposure map corrected for exclusion regions
+        exp_map_background_total : gammapy.map.WcsNDMap
+            The exposure map without correction for exclusion regions
+        livetime : astropy.unit.Quantity
+            The total exposure time for the model
+        """
+        pass
+
     def _normalised_model_per_run(self,
                                   observations: Observations,
                                   acceptance_map: dict[int, BackgroundIRF]) -> dict[int, BackgroundIRF]:
