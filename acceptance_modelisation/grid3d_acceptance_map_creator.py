@@ -115,6 +115,10 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         self.fit_seeds = fit_seeds
         self.fit_bounds = fit_bounds
 
+        offset_edges = offset_axis.edges
+        offset_bins = np.round(np.concatenate((-np.flip(offset_edges), offset_edges[1:]), axis=None), 3)
+        self.map_bins = (energy_axis.edges, offset_bins, offset_bins)
+
         # Initiate upper instance
         super().__init__(energy_axis=energy_axis,
                          max_offset=max_offset,
@@ -210,11 +214,10 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         """
 
         # Compute base data
-        count_map_background, exp_map_background, exp_map_background_total, livetime = self._create_base_computation_map(
+        count_background, exp_map_background, exp_map_background_total, livetime = self._create_base_computation_map(
             observations)
 
         # Downsample map to bkg model resolution
-        count_map_background_downsample = count_map_background.downsample(self.oversample_map, preserve_counts=True)
         exp_map_background_downsample = exp_map_background.downsample(self.oversample_map, preserve_counts=True)
         exp_map_background_total_downsample = exp_map_background_total.downsample(self.oversample_map,
                                                                                   preserve_counts=True)
@@ -230,14 +233,14 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         # Compute acceptance_map
 
         if self.method == 'stack':
-            corrected_counts = count_map_background_downsample.data * (exp_map_background_total_downsample.data /
+            corrected_counts = count_background * (exp_map_background_total_downsample.data /
                                                                        exp_map_background_downsample.data)
         elif self.method == 'fit':
             logger.info(f"Performing the background fit using {self.fit_fnc}.")
-            corrected_counts = np.empty(count_map_background_downsample.data.shape)
-            for e in range(count_map_background_downsample.data.shape[0]):
+            corrected_counts = np.empty(count_background.shape)
+            for e in range(count_background.shape[0]):
                 logger.info(f"Energy bin : [{self.energy_axis.edges[e]:.2f},{self.energy_axis.edges[e + 1]:.2f}]")
-                corrected_counts[e] = self.fit_background(count_map_background_downsample.data[e].astype(int),
+                corrected_counts[e] = self.fit_background(count_background[e].astype(int),
                                                           exp_map_background_total_downsample.data[e],
                                                           exp_map_background_downsample.data[e],
                                                           )
@@ -253,7 +256,8 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
 
         return acceptance_map
 
-    def _create_base_computation_map(self, observations: Observations) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Quantity]:
+    def _create_base_computation_map(self, observations: Observations) -> Tuple[
+        WcsNDMap, WcsNDMap, WcsNDMap, u.Quantity]:
         """
         From a list of observations return a stacked finely binned counts and exposure map in camera frame to compute a
         model
@@ -265,8 +269,8 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
 
         Returns
         -------
-        count_map_background : gammapy.map.WcsNDMap
-            The count map
+        count_background : numpy.ndarray
+            The background counts
         exp_map_background : gammapy.map.WcsNDMap
             The exposure map corrected for exclusion regions
         exp_map_background_total : gammapy.map.WcsNDMap
@@ -274,7 +278,9 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         livetime : astropy.unit.Quantity
             The total exposure time for the model
         """
-        count_map_background = WcsNDMap(geom=self.geom)
+        count_background = np.zeros((len(self.map_bins[0]) - 1,
+                                         len(self.map_bins[1]) - 1,
+                                         len(self.map_bins[2]) - 1))
         exp_map_background = WcsNDMap(geom=self.geom, unit=u.s)
         exp_map_background_total = WcsNDMap(geom=self.geom, unit=u.s)
         livetime = 0. * u.s
@@ -286,17 +292,21 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                 mask = geom.contains(obs.events.radec)
                 obs._events = obs.events.select_row_subset(~mask)
                 # Create a count map in camera frame
-                camera_frame_obs = self._transform_obs_to_camera_frame(obs)
-                count_map_obs, _ = self._create_map(camera_frame_obs, self.geom, [], add_bkg=False)
+                events_camera_frame = self._get_events_in_camera_frame(obs)
+                count_obs, _ = np.histogramdd((obs.events.energy,
+                                                   -events_camera_frame.lon,
+                                                   events_camera_frame.lat
+                                                   ),
+                                                  bins=self.map_bins)
                 # Create exposure maps and fill them with the obs livetime
-                exp_map_obs = MapDataset.create(geom=count_map_obs.geoms['geom'])
-                exp_map_obs_total = MapDataset.create(geom=count_map_obs.geoms['geom'])
-                exp_map_obs.counts.data = camera_frame_obs.observation_live_time_duration.value
-                exp_map_obs_total.counts.data = camera_frame_obs.observation_live_time_duration.value
+                exp_map_obs = MapDataset.create(geom=self.geom)
+                exp_map_obs_total = MapDataset.create(geom=self.geom)
+                exp_map_obs.counts.data = obs.observation_live_time_duration.value
+                exp_map_obs_total.counts.data = obs.observation_live_time_duration.value
 
                 # Evaluate the average exclusion mask in camera frame
                 # by evaluating it on time intervals short compared to the field of view rotation
-                exclusion_mask = np.zeros(count_map_obs.counts.data.shape[1:])
+                exclusion_mask = np.zeros(exp_map_obs.counts.data.shape[1:])
                 time_interval = self._compute_time_intervals_based_on_fov_rotation(obs)
                 for i in range(len(time_interval) - 1):
                     # Compute the exclusion region in camera frame for the average time
@@ -317,13 +327,13 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                 exclusion_mask *= 1 / (time_interval[-1] - time_interval[0]).value
 
                 # Correct the exposure map by the exclusion region
-                for j in range(count_map_obs.counts.data.shape[0]):
+                for j in range(exp_map_obs.counts.data.shape[0]):
                     exp_map_obs.counts.data[j, :, :] = exp_map_obs.counts.data[j, :, :] * exclusion_mask
 
                 # Stack counts and exposure maps and livetime of all observations
-                count_map_background.data += count_map_obs.counts.data
+                count_background += count_obs
                 exp_map_background.data += exp_map_obs.counts.data
                 exp_map_background_total.data += exp_map_obs_total.counts.data
-                livetime += camera_frame_obs.observation_live_time_duration
+                livetime += obs.observation_live_time_duration
 
-        return count_map_background, exp_map_background, exp_map_background_total, livetime
+        return count_background, exp_map_background, exp_map_background_total, livetime

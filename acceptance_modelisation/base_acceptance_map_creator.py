@@ -138,6 +138,37 @@ class BaseAcceptanceMapCreator(ABC):
         self.mini_irf_time_resolution = mini_irf_time_resolution
 
     @staticmethod
+    def _get_events_in_camera_frame(obs: Observation) -> SkyCoord:
+        """
+        Transform events and pointing of an obs from a sky frame to camera frame
+
+        Parameters
+        ----------
+        obs : gammapy.data.observations.Observation
+           The observation to transform
+
+        Returns
+        -------
+        events_camera_frame : astropy.coordinates.SkyCoord
+           The events coordinates for reference in camera frame
+        """
+
+        # Transform to altaz frame
+        altaz_frame = AltAz(obstime=obs.events.time,
+                            location=obs.observatory_earth_location)
+        events_altaz = obs.events.radec.transform_to(altaz_frame)
+        pointing_altaz = obs.get_pointing_icrs(obs.events.time).transform_to(altaz_frame)
+
+        # Rotation to transform to camera frame
+        camera_frame = SkyOffsetFrame(origin=AltAz(alt=pointing_altaz.alt,
+                                                   az=pointing_altaz.az,
+                                                   obstime=obs.events.time,
+                                                   location=obs.observatory_earth_location),
+                                      rotation=[0., ] * len(obs.events.time) * u.deg)
+
+        return events_altaz.transform_to(camera_frame)
+
+    @staticmethod
     def _transform_obs_to_camera_frame(obs: Observation) -> Observation:
         """
         Transform events and pointing of an obs from a sky frame to camera frame
@@ -219,15 +250,15 @@ class BaseAcceptanceMapCreator(ABC):
                 center_coordinate = region.center
                 center_coordinate_altaz = center_coordinate.transform_to(pointing_altaz)
                 center_coordinate_camera_frame = center_coordinate_altaz.transform_to(camera_frame)
-                width_coordinate = center_coordinate.directional_offset_by(region.angle,region.width)
+                width_coordinate = center_coordinate.directional_offset_by(region.angle, region.width)
                 width_coordinate_altaz = width_coordinate.transform_to(pointing_altaz)
                 width_coordinate_camera_frame = width_coordinate_altaz.transform_to(camera_frame)
                 angle_camera_frame = center_coordinate_camera_frame.position_angle(width_coordinate_camera_frame).to(u.deg)[0]
                 center_coordinate_camera_frame_arb = SkyCoord(ra=center_coordinate_camera_frame.lon[0],
                                                               dec=center_coordinate_camera_frame.lat[0])
                 exclude_region_camera_frame.append(EllipseSkyRegion(center=center_coordinate_camera_frame_arb,
-                                                                   width=region.width, height=region.height,
-                                                                   angle=angle_camera_frame))
+                                                                    width=region.width, height=region.height,
+                                                                    angle=angle_camera_frame))
             else:
                 raise Exception(f'{type(region)} region type not supported')
 
@@ -508,7 +539,9 @@ class BaseAcceptanceMapCreator(ABC):
         # Cut observations if requested
         if self.zenith_binning_run_splitting:
             if abs(i_method) == 2:
-                logger.warning('Using a zenith binning requirement based on n_observation while using run splitting is not recommended and could lead to poor models. We recommend switching to a binning requirement based on livetime.')
+                logger.warning('Using a zenith binning requirement based on n_observation while using run splitting '
+                               'is not recommended and could lead to poor models. We recommend switching to a binning '
+                               'requirement based on livetime.')
             compute_observations = Observations()
             for obs in observations:
                 time_interval = self._compute_time_intervals_based_on_zenith_bin(obs, zenith_bin)
@@ -518,8 +551,10 @@ class BaseAcceptanceMapCreator(ABC):
             compute_observations = observations
 
         # Determine initial bins values
-        cos_zenith_observations = np.array([np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in compute_observations])
-        livetime_observations = np.array([obs.observation_live_time_duration.to_value(u.s) for obs in compute_observations])
+        cos_zenith_observations = np.array(
+            [np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in compute_observations])
+        livetime_observations = np.array(
+            [obs.observation_live_time_duration.to_value(u.s) for obs in compute_observations])
 
         # Select the quantity used to count observations
         if i_method in [-1, 1]:
