@@ -1,15 +1,17 @@
 from typing import List, Optional, Tuple
 
 import astropy.units as u
-from gammapy.data import Observation
+import numpy as np
+from gammapy.data import Observation, Observations
+from gammapy.irf import Background2D
 from gammapy.datasets import MapDataset
 from gammapy.maps import MapAxis, WcsNDMap, WcsGeom
-from regions import SkyRegion
+from regions import CircleAnnulusSkyRegion, CircleSkyRegion, SkyRegion
 
-from .base_radial_acceptance_map_creator import BaseRadialAcceptanceMapCreator
+from .base_acceptance_map_creator import BaseAcceptanceMapCreator
 
 
-class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
+class RadialAcceptanceMapCreator(BaseAcceptanceMapCreator):
 
     def __init__(self,
                  energy_axis: MapAxis,
@@ -74,17 +76,28 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
             To be considered value, the bin in space need at least one adjacent bin with a relative difference within this range
         """
 
+        # If no exclusion region, default it as an empty list
+        if exclude_regions is None:
+            exclude_regions = []
+
+        # Compute parameters for internal map
+        self.offset_axis = offset_axis
+        self.oversample_map = oversample_map
+        spatial_resolution = np.min(
+            np.abs(self.offset_axis.edges[1:] - self.offset_axis.edges[:-1])) / self.oversample_map
+        max_offset = np.max(self.offset_axis.edges)
+
         # Initiate upper instance
         super().__init__(energy_axis=energy_axis,
-                         offset_axis=offset_axis,
-                         oversample_map=oversample_map,
+                         max_offset=max_offset,
+                         spatial_resolution=spatial_resolution,
                          exclude_regions=exclude_regions,
                          cos_zenith_binning_method=cos_zenith_binning_method,
                          cos_zenith_binning_parameter_value=cos_zenith_binning_parameter_value,
                          initial_cos_zenith_binning=initial_cos_zenith_binning,
-                         max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
                          max_angular_separation_wobble=max_angular_separation_wobble,
                          zenith_binning_run_splitting=zenith_binning_run_splitting,
+                         max_fraction_pixel_rotation_fov=max_fraction_pixel_rotation_fov,
                          time_resolution=time_resolution,
                          use_mini_irf_computation=use_mini_irf_computation,
                          mini_irf_time_resolution=mini_irf_time_resolution,
@@ -93,9 +106,50 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
                          interpolation_cleaning_energy_relative_threshold=interpolation_cleaning_energy_relative_threshold,
                          interpolation_cleaning_spatial_relative_threshold=interpolation_cleaning_spatial_relative_threshold)
 
-    def _create_base_computation_map(self, observations: Observation) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Unit]:
+    def create_acceptance_map(self, observations: Observations) -> Background2D:
         """
-        From a list of observations return a stacked finely binned counts and exposure map in camera frame to compute a model
+        Calculate a radial acceptance map
+
+        Parameters
+        ----------
+        observations : Observations
+            The collection of observations used to make the acceptance map
+
+        Returns
+        -------
+        acceptance_map : Background2D
+        """
+        count_map_background, exp_map_background, exp_map_background_total, livetime = self._create_base_computation_map(
+            observations)
+
+        data_background = np.zeros((self.energy_axis.nbin, self.offset_axis.nbin)) * u.Unit('s-1 MeV-1 sr-1')
+        for i in range(self.offset_axis.nbin):
+            if np.isclose(0. * u.deg, self.offset_axis.edges[i]):
+                selection_region = CircleSkyRegion(center=self.center_map, radius=self.offset_axis.edges[i + 1])
+            else:
+                selection_region = CircleAnnulusSkyRegion(center=self.center_map,
+                                                          inner_radius=self.offset_axis.edges[i],
+                                                          outer_radius=self.offset_axis.edges[i + 1])
+            selection_map = self.geom.to_image().region_mask([selection_region])
+            for j in range(self.energy_axis.nbin):
+                value = u.dimensionless_unscaled * np.sum(count_map_background.data[j, :, :] * selection_map)
+                value *= np.sum(exp_map_background_total.data[j, :, :] * selection_map) / np.sum(
+                    exp_map_background.data[j, :, :] * selection_map)
+
+                value /= (self.energy_axis.edges[j + 1] - self.energy_axis.edges[j])
+                value /= 2. * np.pi * (
+                            np.cos(self.offset_axis.edges[i]) - np.cos(self.offset_axis.edges[i + 1])) * u.steradian
+                value /= livetime
+                data_background[j, i] = value
+
+        acceptance_map = Background2D(axes=[self.energy_axis, self.offset_axis], data=data_background)
+
+        return acceptance_map
+
+    def _create_base_computation_map(self, observations: Observation) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Quantity]:
+        """
+        From a list of observations return a stacked finely binned counts and exposure map in camera frame to compute a
+        model
 
         Parameters
         ----------
@@ -110,7 +164,7 @@ class RadialAcceptanceMapCreator(BaseRadialAcceptanceMapCreator):
             The exposure map corrected for exclusion regions
         exp_map_background_total : gammapy.map.WcsNDMap
             The exposure map without correction for exclusion regions
-        livetime : astropy.unit.Unit
+        livetime : astropy.unit.Quantity
             The total exposure time for the model
         """
         count_map_background = WcsNDMap(geom=self.geom)

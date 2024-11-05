@@ -13,7 +13,7 @@ from gammapy.datasets import MapDataset
 from gammapy.irf import FoVAlignment, Background2D, Background3D
 from gammapy.irf.background import BackgroundIRF
 from gammapy.makers import MapDatasetMaker, SafeMaskMaker, FoVBackgroundMaker
-from gammapy.maps import WcsNDMap, WcsGeom, Map, MapAxis, RegionGeom
+from gammapy.maps import WcsNDMap, WcsGeom, Map, MapAxis
 from regions import CircleSkyRegion, EllipseSkyRegion, SkyRegion
 from scipy.integrate import cumulative_trapezoid
 from scipy.interpolate import interp1d
@@ -338,82 +338,6 @@ class BaseAcceptanceMapCreator(ABC):
 
         return time_interval
 
-    def _create_base_computation_map(self, observations: Observations) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Unit]:
-        """
-        From a list of observations return a stacked finely binned counts and exposure map in camera frame to compute a model
-
-        Parameters
-        ----------
-        observations : gammapy.data.observations.Observations
-            The list of observations
-
-        Returns
-        -------
-        count_map_background : gammapy.map.WcsNDMap
-            The count map
-        exp_map_background : gammapy.map.WcsNDMap
-            The exposure map corrected for exclusion regions
-        exp_map_background_total : gammapy.map.WcsNDMap
-            The exposure map without correction for exclusion regions
-        livetime : astropy.unit.Unit
-            The total exposure time for the model
-        """
-        count_map_background = WcsNDMap(geom=self.geom)
-        exp_map_background = WcsNDMap(geom=self.geom, unit=u.s)
-        exp_map_background_total = WcsNDMap(geom=self.geom, unit=u.s)
-        livetime = 0. * u.s
-
-        with erfa_astrom.set(ErfaAstromInterpolator(1000 * u.s)):
-            for obs in observations:
-                # Filter events in exclusion regions
-                mask = np.zeros(len(obs.events.table), dtype=bool)
-                for r in self.exclude_regions:
-                    geom_exclusion = RegionGeom.from_regions(r)
-                    mask |= geom_exclusion.contains(obs.events.radec)
-                obs._events = obs.events.select_row_subset(~mask)
-                # Create a count map in camera frame
-                camera_frame_obs = self._transform_obs_to_camera_frame(obs)
-                count_map_obs, _ = self._create_map(camera_frame_obs, self.geom, [], add_bkg=False)
-                # Create exposure maps and fill them with the obs livetime
-                exp_map_obs = MapDataset.create(geom=count_map_obs.geoms['geom'])
-                exp_map_obs_total = MapDataset.create(geom=count_map_obs.geoms['geom'])
-                exp_map_obs.counts.data = camera_frame_obs.observation_live_time_duration.value
-                exp_map_obs_total.counts.data = camera_frame_obs.observation_live_time_duration.value
-
-                # Evaluate the average exclusion mask in camera frame
-                # by evaluating it on time intervals short compared to the field of view rotation
-                exclusion_mask = np.zeros(count_map_obs.counts.data.shape[1:])
-                time_interval = self._compute_time_intervals_based_on_fov_rotation(obs)
-                for i in range(len(time_interval) - 1):
-                    # Compute the exclusion region in camera frame for the average time
-                    dtime = time_interval[i + 1] - time_interval[i]
-                    time = time_interval[i] + dtime / 2
-                    average_alt_az_frame = AltAz(obstime=time,
-                                                 location=obs.observatory_earth_location)
-                    average_alt_az_pointing = obs.get_pointing_icrs(time).transform_to(average_alt_az_frame)
-                    exclusion_region_camera_frame = self._transform_exclusion_region_to_camera_frame(
-                        average_alt_az_pointing)
-                    geom_image = self.geom.to_image()
-
-                    exclusion_mask_t = ~geom_image.region_mask(exclusion_region_camera_frame) if len(
-                        exclusion_region_camera_frame) > 0 else ~Map.from_geom(geom_image)
-                    # Add the exclusion mask in camera frame weighted by the time interval duration
-                    exclusion_mask += exclusion_mask_t * (dtime).value
-                # Normalise the exclusion mask by the full observation duration
-                exclusion_mask *= 1 / (time_interval[-1] - time_interval[0]).value
-
-                # Correct the exposure map by the exclusion region
-                for j in range(count_map_obs.counts.data.shape[0]):
-                    exp_map_obs.counts.data[j, :, :] = exp_map_obs.counts.data[j, :, :] * exclusion_mask
-
-                # Stack counts and exposure maps and livetime of all observations
-                count_map_background.data += count_map_obs.counts.data
-                exp_map_background.data += exp_map_obs.counts.data
-                exp_map_background_total.data += exp_map_obs_total.counts.data
-                livetime += camera_frame_obs.observation_live_time_duration
-
-        return count_map_background, exp_map_background, exp_map_background_total, livetime
-
     @abstractmethod
     def create_acceptance_map(self, observations: Observations) -> BackgroundIRF:
         """
@@ -430,6 +354,30 @@ class BaseAcceptanceMapCreator(ABC):
         -------
         acceptance_map : gammapy.irf.background.Background2D or gammapy.irf.background.Background3D
             The acceptance map calculated using the specific algorithm implemented by the subclass.
+        """
+        pass
+
+    def _create_base_computation_map(self, observations: Observation) -> Tuple:
+        """
+        Abstract method to calculate maps used in acceptance computation from a list of observations.
+
+        Subclasses must implement this method to provide the data used for calculating the acceptance map.
+
+        Parameters
+        ----------
+        observations : gammapy.data.observations.Observations
+            The collection of observations used to create the acceptance map.
+
+        Returns
+        -------
+        count_map_background : gammapy.map.WcsNDMap
+            The count map
+        exp_map_background : gammapy.map.WcsNDMap
+            The exposure map corrected for exclusion regions
+        exp_map_background_total : gammapy.map.WcsNDMap
+            The exposure map without correction for exclusion regions
+        livetime : astropy.unit.Quantity
+            The total exposure time for the model
         """
         pass
 
