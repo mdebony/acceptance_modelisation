@@ -20,6 +20,6 @@ setup(
         'astropy>=4.0',
         'regions>=0.7,<0.8'
     ],
-    author='Mathieu de Bony de Lavergne',
+    author='Mathieu de Bony de Lavergne, Gabriel Emery, Marie-Sophie Carrasco',
     author_email='mathieu.debony@cea.fr'
 )
