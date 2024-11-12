@@ -9,13 +9,16 @@
 
 
 import logging
-from typing import List, Optional
+from typing import Tuple, List, Optional
 
+from astropy.coordinates import AltAz
+from astropy.coordinates.erfa_astrom import erfa_astrom, ErfaAstromInterpolator
 import astropy.units as u
 import numpy as np
 from gammapy.data import Observations
+from gammapy.datasets import MapDataset
 from gammapy.irf import FoVAlignment, Background3D
-from gammapy.maps import MapAxis
+from gammapy.maps import WcsNDMap, Map, MapAxis, RegionGeom
 from iminuit import Minuit
 from regions import SkyRegion
 
@@ -122,6 +125,10 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         self.fit_seeds = fit_seeds
         self.fit_bounds = fit_bounds
 
+        offset_edges = offset_axis.edges
+        offset_bins = np.round(np.concatenate((-np.flip(offset_edges), offset_edges[1:]), axis=None), 3)
+        self.map_bins = (energy_axis.edges, offset_bins, offset_bins)
+
         # Initiate upper instance
         super().__init__(energy_axis=energy_axis,
                          max_offset=max_offset,
@@ -217,11 +224,10 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         """
 
         # Compute base data
-        count_map_background, exp_map_background, exp_map_background_total, livetime = self._create_base_computation_map(
+        count_background, exp_map_background, exp_map_background_total, livetime = self._create_base_computation_map(
             observations)
 
         # Downsample map to bkg model resolution
-        count_map_background_downsample = count_map_background.downsample(self.oversample_map, preserve_counts=True)
         exp_map_background_downsample = exp_map_background.downsample(self.oversample_map, preserve_counts=True)
         exp_map_background_total_downsample = exp_map_background_total.downsample(self.oversample_map,
                                                                                   preserve_counts=True)
@@ -237,14 +243,14 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         # Compute acceptance_map
 
         if self.method == 'stack':
-            corrected_counts = count_map_background_downsample.data * (exp_map_background_total_downsample.data /
-                                                                       exp_map_background_downsample.data)
+            corrected_counts = count_background * (exp_map_background_total_downsample.data /
+                                                   exp_map_background_downsample.data)
         elif self.method == 'fit':
             logger.info(f"Performing the background fit using {self.fit_fnc}.")
-            corrected_counts = np.empty(count_map_background_downsample.data.shape)
-            for e in range(count_map_background_downsample.data.shape[0]):
+            corrected_counts = np.empty(count_background.shape)
+            for e in range(count_background.shape[0]):
                 logger.info(f"Energy bin : [{self.energy_axis.edges[e]:.2f},{self.energy_axis.edges[e + 1]:.2f}]")
-                corrected_counts[e] = self.fit_background(count_map_background_downsample.data[e].astype(int),
+                corrected_counts[e] = self.fit_background(count_background[e].astype(int),
                                                           exp_map_background_total_downsample.data[e],
                                                           exp_map_background_downsample.data[e],
                                                           )
@@ -259,3 +265,85 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                                       fov_alignment=FoVAlignment.ALTAZ)
 
         return acceptance_map
+
+    def _create_base_computation_map(self, observations: Observations) -> Tuple[
+                                     np.ndarray, WcsNDMap, WcsNDMap, u.Quantity]:
+        """
+        From a list of observations return a stacked finely binned counts and exposure map in camera frame to compute a
+        model
+
+        Parameters
+        ----------
+        observations : gammapy.data.observations.Observations
+            The list of observations
+
+        Returns
+        -------
+        count_background : numpy.ndarray
+            The background counts
+        exp_map_background : gammapy.map.WcsNDMap
+            The exposure map corrected for exclusion regions
+        exp_map_background_total : gammapy.map.WcsNDMap
+            The exposure map without correction for exclusion regions
+        livetime : astropy.unit.Quantity
+            The total exposure time for the model
+        """
+        count_background = np.zeros((len(self.map_bins[0]) - 1,
+                                     len(self.map_bins[1]) - 1,
+                                     len(self.map_bins[2]) - 1))
+        exp_map_background = WcsNDMap(geom=self.geom, unit=u.s)
+        exp_map_background_total = WcsNDMap(geom=self.geom, unit=u.s)
+        livetime = 0. * u.s
+
+        with erfa_astrom.set(ErfaAstromInterpolator(1000 * u.s)):
+            for obs in observations:
+                # Filter events in exclusion regions
+                geom = RegionGeom.from_regions(self.exclude_regions)
+                mask = geom.contains(obs.events.radec)
+                obs._events = obs.events.select_row_subset(~mask)
+                # Create a count map in camera frame
+                events_camera_frame = self._get_events_in_camera_frame(obs)
+                count_obs, _ = np.histogramdd((obs.events.energy,
+                                               -events_camera_frame.lon,
+                                               events_camera_frame.lat
+                                               ),
+                                              bins=self.map_bins)
+                # Create exposure maps and fill them with the obs livetime
+                exp_map_obs = MapDataset.create(geom=self.geom)
+                exp_map_obs_total = MapDataset.create(geom=self.geom)
+                exp_map_obs.counts.data = obs.observation_live_time_duration.value
+                exp_map_obs_total.counts.data = obs.observation_live_time_duration.value
+
+                # Evaluate the average exclusion mask in camera frame
+                # by evaluating it on time intervals short compared to the field of view rotation
+                exclusion_mask = np.zeros(exp_map_obs.counts.data.shape[1:])
+                time_interval = self._compute_time_intervals_based_on_fov_rotation(obs)
+                for i in range(len(time_interval) - 1):
+                    # Compute the exclusion region in camera frame for the average time
+                    dtime = time_interval[i + 1] - time_interval[i]
+                    time = time_interval[i] + dtime / 2
+                    average_alt_az_frame = AltAz(obstime=time,
+                                                 location=obs.observatory_earth_location)
+                    average_alt_az_pointing = obs.get_pointing_icrs(time).transform_to(average_alt_az_frame)
+                    exclusion_region_camera_frame = self._transform_exclusion_region_to_camera_frame(
+                        average_alt_az_pointing)
+                    geom_image = self.geom.to_image()
+
+                    exclusion_mask_t = ~geom_image.region_mask(exclusion_region_camera_frame) if len(
+                        exclusion_region_camera_frame) > 0 else ~Map.from_geom(geom_image)
+                    # Add the exclusion mask in camera frame weighted by the time interval duration
+                    exclusion_mask += exclusion_mask_t * (dtime).value
+                # Normalise the exclusion mask by the full observation duration
+                exclusion_mask *= 1 / (time_interval[-1] - time_interval[0]).value
+
+                # Correct the exposure map by the exclusion region
+                for j in range(exp_map_obs.counts.data.shape[0]):
+                    exp_map_obs.counts.data[j, :, :] = exp_map_obs.counts.data[j, :, :] * exclusion_mask
+
+                # Stack counts and exposure maps and livetime of all observations
+                count_background += count_obs
+                exp_map_background.data += exp_map_obs.counts.data
+                exp_map_background_total.data += exp_map_obs_total.counts.data
+                livetime += obs.observation_live_time_duration
+
+        return count_background, exp_map_background, exp_map_background_total, livetime
