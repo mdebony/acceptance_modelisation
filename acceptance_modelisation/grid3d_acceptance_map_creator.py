@@ -234,7 +234,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
 
         if self.method == 'stack':
             corrected_counts = count_background * (exp_map_background_total_downsample.data /
-                                                                       exp_map_background_downsample.data)
+                                                   exp_map_background_downsample.data)
         elif self.method == 'fit':
             logger.info(f"Performing the background fit using {self.fit_fnc}.")
             corrected_counts = np.empty(count_background.shape)
@@ -257,7 +257,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         return acceptance_map
 
     def _create_base_computation_map(self, observations: Observations) -> Tuple[
-        WcsNDMap, WcsNDMap, WcsNDMap, u.Quantity]:
+                                     np.ndarray, WcsNDMap, WcsNDMap, u.Quantity]:
         """
         From a list of observations return a stacked finely binned counts and exposure map in camera frame to compute a
         model
@@ -279,8 +279,8 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
             The total exposure time for the model
         """
         count_background = np.zeros((len(self.map_bins[0]) - 1,
-                                         len(self.map_bins[1]) - 1,
-                                         len(self.map_bins[2]) - 1))
+                                     len(self.map_bins[1]) - 1,
+                                     len(self.map_bins[2]) - 1))
         exp_map_background = WcsNDMap(geom=self.geom, unit=u.s)
         exp_map_background_total = WcsNDMap(geom=self.geom, unit=u.s)
         livetime = 0. * u.s
@@ -294,10 +294,10 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                 # Create a count map in camera frame
                 events_camera_frame = self._get_events_in_camera_frame(obs)
                 count_obs, _ = np.histogramdd((obs.events.energy,
-                                                   -events_camera_frame.lon,
-                                                   events_camera_frame.lat
-                                                   ),
-                                                  bins=self.map_bins)
+                                               -events_camera_frame.lon,
+                                               events_camera_frame.lat
+                                               ),
+                                              bins=self.map_bins)
                 # Create exposure maps and fill them with the obs livetime
                 exp_map_obs = MapDataset.create(geom=self.geom)
                 exp_map_obs_total = MapDataset.create(geom=self.geom)
