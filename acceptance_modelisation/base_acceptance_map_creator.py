@@ -209,7 +209,7 @@ class BaseAcceptanceMapCreator(ABC):
 
             # mid Az of rotate_to_obs
             az_obs = rotate_to_obs.get_pointing_altaz(rotate_to_obs.tmid).az
-            rot_angle = az_obs + pointing_altaz.az
+            rot_angle = az_obs - pointing_altaz.az
 
             events_camera_frame = frame_centers.directional_offset_by(
                 position_angle=pos_angle - rot_angle, separation=sep
