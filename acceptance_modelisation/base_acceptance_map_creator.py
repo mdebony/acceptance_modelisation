@@ -289,7 +289,7 @@ class BaseAcceptanceMapCreator(ABC):
                         center_coordinate_camera_frame
                     )
                     center_coordinate_camera_frame = frame_center.directional_offset_by(
-                        position_angle=pos_angle + rot_angle, separation=sep
+                        position_angle=pos_angle - rot_angle, separation=sep
                     )
                 center_coordinate_camera_frame_arb = SkyCoord(
                     ra=center_coordinate_camera_frame.lon[0],
