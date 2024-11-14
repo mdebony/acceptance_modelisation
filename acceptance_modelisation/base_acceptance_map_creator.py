@@ -219,6 +219,8 @@ class BaseAcceptanceMapCreator(ABC):
             derot_angle = -np.rad2deg(np.arctan(component0_y / component0_x)) * u.deg
             theory_angle = az_obs - 34.23 * u.deg
             rot_angle = theory_angle - derot_angle
+            while rot_angle > 90 * u.deg:
+                rot_angle = rot_angle - 180 * u.deg
 
             events_camera_frame = frame_centers.directional_offset_by(
                 position_angle=pos_angle + rot_angle, separation=sep
