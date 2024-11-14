@@ -216,11 +216,12 @@ class BaseAcceptanceMapCreator(ABC):
                 np.stack([events_camera_frame.lon, events_camera_frame.lat]).T
             )
             component0_x, component0_y = pca.components_[0]
-            angle = np.rad2deg(np.arctan(component0_y / component0_x))
-            rot_angle = az_obs - angle * u.deg
+            derot_angle = -np.rad2deg(np.arctan(component0_y / component0_x)) * u.deg
+            theory_angle = az_obs - 34.23 * u.deg
+            rot_angle = theory_angle - derot_angle
 
             events_camera_frame = frame_centers.directional_offset_by(
-                position_angle=pos_angle - rot_angle, separation=sep
+                position_angle=pos_angle + rot_angle, separation=sep
             )
 
         # Formatting data for the output
@@ -238,8 +239,10 @@ class BaseAcceptanceMapCreator(ABC):
             aeff=obs.aeff,
         )
         obs_camera_frame._location = obs.meta.location
+        if rotate_to_obs is not None:
+            return obs_camera_frame, rot_angle
 
-        return obs_camera_frame, angle * u.deg
+        return obs_camera_frame, None
 
     def _transform_exclusion_region_to_camera_frame(
         self,
