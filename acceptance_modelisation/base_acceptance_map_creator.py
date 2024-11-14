@@ -27,6 +27,7 @@ from .toolbox import (
     generate_irf_from_mini_irf,
     compute_neighbour_condition_validation,
 )
+from sklearn.decomposition import PCA
 
 logger = logging.getLogger(__name__)
 
