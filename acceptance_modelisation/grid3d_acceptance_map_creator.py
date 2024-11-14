@@ -352,7 +352,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                 mask = geom.contains(obs.events.radec)
                 obs._events = obs.events.select_row_subset(~mask)
                 # Create a count map in camera frame
-                camera_frame_obs = self._transform_obs_to_camera_frame(
+                camera_frame_obs, pca_angle = self._transform_obs_to_camera_frame(
                     obs, rotate_all_to_obs
                 )
                 count_map_obs, _ = self._create_map(
@@ -386,6 +386,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                         self._transform_exclusion_region_to_camera_frame(
                             average_alt_az_pointing,
                             rotate_all_to_obs,
+                            pca_angle,
                         )
                     )
                     geom_image = self.geom.to_image()

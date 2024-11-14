@@ -5,7 +5,7 @@ from typing import Tuple, List, Optional, Union
 
 import astropy.units as u
 import numpy as np
-from astropy.coordinates import SkyCoord, AltAz, SkyOffsetFrame
+from astropy.coordinates import SkyCoord, AltAz, SkyOffsetFrame, Angle
 from astropy.coordinates.erfa_astrom import erfa_astrom, ErfaAstromInterpolator
 from astropy.time import Time
 from gammapy.data import Observations, Observation
@@ -239,12 +239,13 @@ class BaseAcceptanceMapCreator(ABC):
         )
         obs_camera_frame._location = obs.meta.location
 
-        return obs_camera_frame
+        return obs_camera_frame, angle * u.deg
 
     def _transform_exclusion_region_to_camera_frame(
         self,
         pointing_altaz: AltAz,
         rotate_to_obs: Optional[Observation] = None,
+        pca_angle: Optional[Angle] = None,
     ) -> List[SkyRegion]:
         """
         Transform the list of exclusion regions in sky frame into a list in camera frame.
@@ -290,7 +291,7 @@ class BaseAcceptanceMapCreator(ABC):
                     frame_center = pointing_altaz.transform_to(camera_frame)
                     rot_angle = (
                         rotate_to_obs.get_pointing_altaz(rotate_to_obs.tmid).az
-                        - pointing_altaz.az
+                        - pca_angle
                     )
                     sep = frame_center.separation(center_coordinate_camera_frame)
                     pos_angle = frame_center.position_angle(
