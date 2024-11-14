@@ -211,6 +211,13 @@ class BaseAcceptanceMapCreator(ABC):
             az_obs = rotate_to_obs.get_pointing_altaz(rotate_to_obs.tmid).az
             rot_angle = az_obs - pointing_altaz.az
 
+            pca = PCA(n_components=2).fit(
+                np.stack([events_camera_frame.lon, events_camera_frame.lat]).T
+            )
+            component0_x, component0_y = pca.components_[0]
+            angle = np.rad2deg(np.arctan(component0_y / component0_x))
+            rot_angle = az_obs - angle * u.deg
+
             events_camera_frame = frame_centers.directional_offset_by(
                 position_angle=pos_angle - rot_angle, separation=sep
             )
