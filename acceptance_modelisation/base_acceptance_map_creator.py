@@ -203,6 +203,36 @@ class BaseAcceptanceMapCreator(ABC):
 
         # Rotation to one observation
         if rotate_to_obs is not None:
+            altaz_frame_obs = AltAz(
+                obstime=rotate_to_obs.events.time, location=rotate_to_obs.meta.location
+            )
+            events_altaz_obs = rotate_to_obs.events.radec.transform_to(altaz_frame_obs)
+            pointing_altaz_obs = rotate_to_obs.get_pointing_icrs(
+                rotate_to_obs.events.time
+            ).transform_to(altaz_frame_obs)
+
+            # Rotation to transform to camera frame
+            camera_frame_obs = SkyOffsetFrame(
+                origin=AltAz(
+                    alt=pointing_altaz_obs.alt,
+                    az=pointing_altaz_obs.az,
+                    obstime=rotate_to_obs.events.time,
+                    location=rotate_to_obs.meta.location,
+                ),
+                rotation=[
+                    0.0,
+                ]
+                * len(rotate_to_obs.events.time)
+                * u.deg,
+            )
+            events_camera_frame_obs = events_altaz_obs.transform_to(camera_frame_obs)
+            pca_obs = PCA(n_components=2).fit(
+                np.stack([events_camera_frame_obs.lon, events_camera_frame_obs.lat]).T
+            )
+            component0_x, component0_y = pca_obs.components_[0]
+            derot_angle_obs = np.rad2deg(np.arctan(component0_y / component0_x)) * u.deg
+
+            #####
             frame_centers = pointing_altaz.transform_to(camera_frame)
 
             sep = frame_centers.separation(events_camera_frame)
@@ -210,20 +240,22 @@ class BaseAcceptanceMapCreator(ABC):
 
             # mid Az of rotate_to_obs
             az_obs = rotate_to_obs.get_pointing_altaz(rotate_to_obs.tmid).az
-            rot_angle = az_obs - pointing_altaz.az
 
             pca = PCA(n_components=2).fit(
                 np.stack([events_camera_frame.lon, events_camera_frame.lat]).T
             )
             component0_x, component0_y = pca.components_[0]
-            derot_angle = -np.rad2deg(np.arctan(component0_y / component0_x)) * u.deg
+            derot_angle = np.rad2deg(np.arctan(component0_y / component0_x)) * u.deg
             theory_angle = az_obs - 34.23 * u.deg
-            rot_angle = theory_angle - derot_angle
-            while rot_angle > 90 * u.deg:
-                rot_angle = rot_angle - 180 * u.deg
+            rot_angle = derot_angle_obs - derot_angle
+            # print(derot_angle_obs, derot_angle)
+            # rot_angle = angle_rot - derot_angle
+            # while rot_angle > 90 * u.deg:
+            #     rot_angle = rot_angle - 180 * u.deg
+            # print(rot_angle)
 
             events_camera_frame = frame_centers.directional_offset_by(
-                position_angle=pos_angle + rot_angle, separation=sep
+                position_angle=pos_angle - rot_angle, separation=sep
             )
 
         # Formatting data for the output
@@ -303,7 +335,7 @@ class BaseAcceptanceMapCreator(ABC):
                         center_coordinate_camera_frame
                     )
                     center_coordinate_camera_frame = frame_center.directional_offset_by(
-                        position_angle=pos_angle + pca_angle, separation=sep
+                        position_angle=pos_angle - pca_angle, separation=sep
                     )
                 center_coordinate_camera_frame_arb = SkyCoord(
                     ra=center_coordinate_camera_frame.lon[0],
