@@ -292,16 +292,16 @@ class BaseAcceptanceMapCreator(ABC):
                 )
                 if rotate_to_obs is not None:
                     frame_center = pointing_altaz.transform_to(camera_frame)
-                    rot_angle = (
-                        rotate_to_obs.get_pointing_altaz(rotate_to_obs.tmid).az
-                        - pca_angle
-                    )
+                    # rot_angle = (
+                    #     rotate_to_obs.get_pointing_altaz(rotate_to_obs.tmid).az
+                    #     - pca_angle
+                    # )
                     sep = frame_center.separation(center_coordinate_camera_frame)
                     pos_angle = frame_center.position_angle(
                         center_coordinate_camera_frame
                     )
                     center_coordinate_camera_frame = frame_center.directional_offset_by(
-                        position_angle=pos_angle - rot_angle, separation=sep
+                        position_angle=pos_angle + pca_angle, separation=sep
                     )
                 center_coordinate_camera_frame_arb = SkyCoord(
                     ra=center_coordinate_camera_frame.lon[0],
