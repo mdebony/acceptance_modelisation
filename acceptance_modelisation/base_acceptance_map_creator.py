@@ -246,8 +246,15 @@ class BaseAcceptanceMapCreator(ABC):
             )
             component0_x, component0_y = pca.components_[0]
             derot_angle = np.rad2deg(np.arctan(component0_y / component0_x)) * u.deg
-            theory_angle = az_obs - 34.23 * u.deg
-            rot_angle = derot_angle_obs - derot_angle
+            az = obs.get_pointing_altaz(obs.tmid).az
+            theory_diff = az_obs - az
+            rot_angle = -derot_angle_obs + derot_angle
+            if theory_diff > 90 * u.deg:
+                rot_angle += 180 * u.deg
+            if theory_diff < -90 * u.deg:
+                rot_angle -= 180 * u.deg
+
+            # rot_angle = derot_angle_obs - derot_angle
             # print(derot_angle_obs, derot_angle)
             # rot_angle = angle_rot - derot_angle
             # while rot_angle > 90 * u.deg:

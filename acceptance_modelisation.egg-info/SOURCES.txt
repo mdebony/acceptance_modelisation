@@ -1,0 +1,16 @@
+.gitignore
+README.md
+setup.py
+acceptance_modelisation/__init__.py
+acceptance_modelisation/base_acceptance_map_creator.py
+acceptance_modelisation/bkg_collection.py
+acceptance_modelisation/exception.py
+acceptance_modelisation/grid3d_acceptance_map_creator.py
+acceptance_modelisation/modeling.py
+acceptance_modelisation/radial_acceptance_map_creator.py
+acceptance_modelisation/toolbox.py
+acceptance_modelisation.egg-info/PKG-INFO
+acceptance_modelisation.egg-info/SOURCES.txt
+acceptance_modelisation.egg-info/dependency_links.txt
+acceptance_modelisation.egg-info/requires.txt
+acceptance_modelisation.egg-info/top_level.txt
