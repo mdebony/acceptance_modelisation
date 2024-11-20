@@ -250,10 +250,11 @@ class BaseAcceptanceMapCreator(ABC):
             theory_diff = az_obs - az
             rot_angle = derot_angle_obs - derot_angle
             print(rot_angle)
-            if np.abs(theory_diff) > 90 * u.deg:
-                rot_angle += 180 * u.deg
+            # if np.abs(theory_diff) > 90 * u.deg:
+            #     rot_angle += 180 * u.deg
             print(theory_diff.deg)
             print(rot_angle)
+            print(derot_angle)
 
             # rot_angle = derot_angle_obs - derot_angle
             # print(derot_angle_obs, derot_angle)
@@ -262,6 +263,7 @@ class BaseAcceptanceMapCreator(ABC):
             #     rot_angle = rot_angle - 180 * u.deg
             # print(rot_angle)
 
+            # pos angle North to East
             events_camera_frame = frame_centers.directional_offset_by(
                 position_angle=pos_angle - rot_angle, separation=sep
             )
