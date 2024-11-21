@@ -11,6 +11,7 @@ from gammapy.irf import FoVAlignment, Background3D
 from gammapy.maps import WcsNDMap, Map, MapAxis, RegionGeom
 from iminuit import Minuit
 from regions import SkyRegion
+from scipy.ndimage import rotate
 
 from .base_acceptance_map_creator import BaseAcceptanceMapCreator
 from .modeling import FIT_FUNCTION, log_factorial, log_poisson
@@ -365,25 +366,19 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
 
                 # Remove Gradient with zd_correction
                 if zd_correction is not None:
-                    from scipy.ndimage import rotate
+                    rot_zd_corr = rotate(
+                        zd_correction.data,
+                        rot_angle.to_value("deg"),
+                        axes=[2, 1],
+                        reshape=False,
+                        order=1,
+                    )
 
                     count_map_obs.counts.data = (
                         count_map_obs.counts.data
-                        - rotate(
-                            zd_correction.data / 2,
-                            rot_angle.to_value("deg"),
-                            axes=[2, 1],
-                            reshape=False,
-                            order=1,
-                        )
-                        * count_map_obs.counts.data
+                        - rot_zd_corr * count_map_obs.counts.data
                         + zd_correction.data / 2 * count_map_obs.counts.data
                     )
-                    # import matplotlib.pyplot as plt
-                    #
-                    # plt.imshow(count_map_obs.counts.data[0])
-                    # plt.colorbar()
-                    # plt.show()
 
                 # Create exposure maps and fill them with the obs livetime
                 exp_map_obs = MapDataset.create(geom=count_map_obs.geoms["geom"])
