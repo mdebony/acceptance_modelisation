@@ -364,38 +364,6 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                     camera_frame_obs, self.geom, [], add_bkg=False
                 )
 
-                # Remove Gradient with zd_correction
-                if zd_correction is not None:
-                    rot_zd_corr = rotate(
-                        zd_correction.data,
-                        rot_angle.to_value("deg"),
-                        axes=[2, 1],
-                        reshape=False,
-                        order=3,
-                    )
-                    # import matplotlib.pyplot as plt
-                    #
-                    # plt.imshow(
-                    #     rot_zd_corr[0], origin="lower", cmap="RdBu_r", vmin=-1, vmax=1
-                    # )
-                    # plt.colorbar()
-                    # plt.show()
-                    # plt.imshow(
-                    #     zd_correction.data[0],
-                    #     origin="lower",
-                    #     cmap="RdBu_r",
-                    #     vmin=-1,
-                    #     vmax=1,
-                    # )
-                    # plt.colorbar()
-                    # plt.show()
-
-                    count_map_obs.counts.data = (
-                        count_map_obs.counts.data
-                        - rot_zd_corr / 2 * count_map_obs.counts.data
-                        + zd_correction.data / 2 * count_map_obs.counts.data
-                    )
-
                 # Create exposure maps and fill them with the obs livetime
                 exp_map_obs = MapDataset.create(geom=count_map_obs.geoms["geom"])
                 exp_map_obs_total = MapDataset.create(geom=count_map_obs.geoms["geom"])
@@ -445,6 +413,40 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                         exp_map_obs.counts.data[j, :, :] * exclusion_mask
                     )
 
+                # Remove Gradient with zd_correction
+                if zd_correction is not None:
+                    zd_data = (
+                        zd_correction.data * exp_map_obs.data / exp_map_obs_total.data
+                    )
+                    rot_zd_corr = rotate(
+                        zd_data,
+                        rot_angle.to_value("deg"),
+                        axes=[1, 2],
+                        reshape=False,
+                        order=3,
+                    )
+                    # import matplotlib.pyplot as plt
+                    #
+                    # plt.imshow(
+                    #     rot_zd_corr[0], origin="lower", cmap="RdBu_r", vmin=-1, vmax=1
+                    # )
+                    # plt.colorbar()
+                    # plt.show()
+                    # plt.imshow(
+                    #     zd_correction.data[0],
+                    #     origin="lower",
+                    #     cmap="RdBu_r",
+                    #     vmin=-1,
+                    #     vmax=1,
+                    # )
+                    # plt.colorbar()
+                    # plt.show()
+
+                    count_map_obs.counts.data = (
+                        count_map_obs.counts.data
+                        - rot_zd_corr / 2 * count_map_obs.counts.data
+                        + zd_data / 2 * count_map_obs.counts.data
+                    )
                 # Stack counts and exposure maps and livetime of all observations
                 count_map_background.data += count_map_obs.counts.data
                 exp_map_background.data += exp_map_obs.counts.data
