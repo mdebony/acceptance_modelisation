@@ -218,6 +218,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         self,
         observations: Observations,
         rotate_all_to_obs: Optional[Observation] = None,
+        zd_correction: Optional[Background3D] = None,
     ) -> Background3D:
         """
         Calculate a 3D grid acceptance map
@@ -239,7 +240,9 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
 
         # Compute base data
         count_map_background, exp_map_background, exp_map_background_total, livetime = (
-            self._create_base_computation_map(observations, rotate_all_to_obs)
+            self._create_base_computation_map(
+                observations, rotate_all_to_obs, zd_correction
+            )
         )
 
         # Downsample map to bkg model resolution
@@ -313,6 +316,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         self,
         observations: Observations,
         rotate_all_to_obs: Optional[Observation] = None,
+        zd_correction: Optional[Background3D] = None,
     ) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Quantity]:
         """
         From a list of observations return a stacked finely binned counts and exposure map in camera frame to compute a
@@ -352,12 +356,35 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                 mask = geom.contains(obs.events.radec)
                 obs._events = obs.events.select_row_subset(~mask)
                 # Create a count map in camera frame
-                camera_frame_obs, pca_angle = self._transform_obs_to_camera_frame(
+                camera_frame_obs, rot_angle = self._transform_obs_to_camera_frame(
                     obs, rotate_all_to_obs
                 )
                 count_map_obs, _ = self._create_map(
                     camera_frame_obs, self.geom, [], add_bkg=False
                 )
+
+                # Remove Gradient with zd_correction
+                if zd_correction is not None:
+                    from scipy.ndimage import rotate
+
+                    count_map_obs.counts.data = (
+                        count_map_obs.counts.data
+                        - rotate(
+                            zd_correction.data / 2,
+                            rot_angle.to_value("deg"),
+                            axes=[2, 1],
+                            reshape=False,
+                            order=1,
+                        )
+                        * count_map_obs.counts.data
+                        + zd_correction.data / 2 * count_map_obs.counts.data
+                    )
+                    # import matplotlib.pyplot as plt
+                    #
+                    # plt.imshow(count_map_obs.counts.data[0])
+                    # plt.colorbar()
+                    # plt.show()
+
                 # Create exposure maps and fill them with the obs livetime
                 exp_map_obs = MapDataset.create(geom=count_map_obs.geoms["geom"])
                 exp_map_obs_total = MapDataset.create(geom=count_map_obs.geoms["geom"])
@@ -386,7 +413,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                         self._transform_exclusion_region_to_camera_frame(
                             average_alt_az_pointing,
                             rotate_all_to_obs,
-                            pca_angle,
+                            rot_angle,
                         )
                     )
                     geom_image = self.geom.to_image()
