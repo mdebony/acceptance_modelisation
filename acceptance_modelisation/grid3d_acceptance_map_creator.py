@@ -368,7 +368,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                 if zd_correction is not None:
                     rot_zd_corr = rotate(
                         zd_correction.data,
-                        rot_angle.to_value("deg"),
+                        -rot_angle.to_value("deg"),
                         axes=[2, 1],
                         reshape=False,
                         order=1,
