@@ -368,11 +368,27 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                 if zd_correction is not None:
                     rot_zd_corr = rotate(
                         zd_correction.data,
-                        -rot_angle.to_value("deg"),
+                        rot_angle.to_value("deg"),
                         axes=[2, 1],
                         reshape=False,
-                        order=1,
+                        order=3,
                     )
+                    # import matplotlib.pyplot as plt
+                    #
+                    # plt.imshow(
+                    #     rot_zd_corr[0], origin="lower", cmap="RdBu_r", vmin=-1, vmax=1
+                    # )
+                    # plt.colorbar()
+                    # plt.show()
+                    # plt.imshow(
+                    #     zd_correction.data[0],
+                    #     origin="lower",
+                    #     cmap="RdBu_r",
+                    #     vmin=-1,
+                    #     vmax=1,
+                    # )
+                    # plt.colorbar()
+                    # plt.show()
 
                     count_map_obs.counts.data = (
                         count_map_obs.counts.data
