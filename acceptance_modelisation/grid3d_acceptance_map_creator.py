@@ -376,7 +376,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
 
                     count_map_obs.counts.data = (
                         count_map_obs.counts.data
-                        - rot_zd_corr * count_map_obs.counts.data
+                        - rot_zd_corr / 2 * count_map_obs.counts.data
                         + zd_correction.data / 2 * count_map_obs.counts.data
                     )
 
