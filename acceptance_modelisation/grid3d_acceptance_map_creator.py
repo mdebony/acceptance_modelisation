@@ -416,7 +416,9 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                 # Remove Gradient with zd_correction
                 if zd_correction is not None:
                     zd_data = (
-                        zd_correction.data * exp_map_obs.data / exp_map_obs_total.data
+                        zd_correction.data
+                        * exp_map_obs.counts.data
+                        / exp_map_obs_total.counts.data
                     )
                     rot_zd_corr = rotate(
                         zd_data,
