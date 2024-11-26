@@ -260,7 +260,7 @@ class BaseAcceptanceMapCreator(ABC):
                 np.stack([events_camera_frame.lon, events_camera_frame.lat]).T
             )
             component0_x, component0_y = pca.components_[0]
-            derot_angle = np.rad2deg(np.arctan2(component0_y, component0_x)) * u.deg
+            derot_angle = np.rad2deg(np.arctan(component0_y / component0_x)) * u.deg
             az = obs.get_pointing_altaz(obs.tmid).az
             derot_angle = gamma_pca_corr_magic(derot_angle, az)
 
@@ -268,12 +268,13 @@ class BaseAcceptanceMapCreator(ABC):
             rot_angle = derot_angle_obs - derot_angle
             if derotate:
                 rot_angle = -derot_angle
-            print(rot_angle)
+            print(
+                f"derot_angle_obs, derot_angle {derot_angle_obs.to_value(u.deg), derot_angle.to_value(u.deg)}"
+            )
+            print(f"Rot_angle{rot_angle}")
+            print(f"Theory angle {theory_diff.deg}")
             # if np.abs(theory_diff) > 90 * u.deg:
             #     rot_angle += 180 * u.deg
-            print(theory_diff.deg)
-            print(rot_angle)
-            print(derot_angle)
 
             # rot_angle = derot_angle_obs - derot_angle
             # print(derot_angle_obs, derot_angle)
