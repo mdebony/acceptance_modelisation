@@ -220,6 +220,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         observations: Observations,
         rotate_all_to_obs: Optional[Observation] = None,
         zd_correction: Optional[Background3D] = None,
+        derotate: Optional[bool] = False,
     ) -> Background3D:
         """
         Calculate a 3D grid acceptance map
@@ -242,7 +243,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         # Compute base data
         count_map_background, exp_map_background, exp_map_background_total, livetime = (
             self._create_base_computation_map(
-                observations, rotate_all_to_obs, zd_correction
+                observations, rotate_all_to_obs, zd_correction, derotate
             )
         )
 
@@ -318,6 +319,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         observations: Observations,
         rotate_all_to_obs: Optional[Observation] = None,
         zd_correction: Optional[Background3D] = None,
+        derotate: Optional[bool] = False,
     ) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Quantity]:
         """
         From a list of observations return a stacked finely binned counts and exposure map in camera frame to compute a
@@ -358,7 +360,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                 obs._events = obs.events.select_row_subset(~mask)
                 # Create a count map in camera frame
                 camera_frame_obs, rot_angle = self._transform_obs_to_camera_frame(
-                    obs, rotate_all_to_obs
+                    obs, rotate_all_to_obs, derotate
                 )
                 count_map_obs, _ = self._create_map(
                     camera_frame_obs, self.geom, [], add_bkg=False
@@ -418,7 +420,7 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                     zd_data = zd_correction.data
                     rot_zd_corr = rotate(
                         zd_data,
-                        rot_angle.to_value("deg"),
+                        -rot_angle.to_value("deg"),
                         axes=[1, 2],
                         reshape=False,
                         order=3,
@@ -431,7 +433,50 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
                     # plt.colorbar()
                     # plt.show()
                     # plt.imshow(
-                    #     zd_correction.data[0],
+                    #     count_map_obs.counts.data[0],
+                    #     origin="lower",
+                    #     vmin=-1,
+                    #     vmax=1,
+                    # )
+                    # plt.colorbar()
+                    # plt.show()
+                    flat = (
+                        count_map_obs.counts.data
+                        - rot_zd_corr / 2 * count_map_obs.counts.data
+                    )
+                    delta = np.sum(flat, 0) - rotate(
+                        np.sum(flat, 0), 180, reshape=False
+                    )
+                    # import matplotlib.pyplot as plt
+                    #
+                    # plt.imshow(
+                    #     np.sum(count_map_obs.counts.data, 0),
+                    #     origin="lower",
+                    #     cmap="Reds",
+                    # )
+                    # plt.colorbar()
+                    # plt.show()
+                    # plt.imshow(
+                    #     rot_zd_corr[0],
+                    #     origin="lower",
+                    #     cmap="RdBu_r",
+                    #     vmin=-1,
+                    #     vmax=1,
+                    # )
+                    # plt.colorbar()
+                    # plt.show()
+                    #
+                    # plt.imshow(
+                    #     delta / np.sum(flat, 0),
+                    #     origin="lower",
+                    #     cmap="RdBu_r",
+                    #     vmin=-1,
+                    #     vmax=1,
+                    # )
+                    # plt.colorbar()
+                    # plt.show()
+                    # plt.imshow(
+                    #     np.sum(flat, 0),
                     #     origin="lower",
                     #     cmap="RdBu_r",
                     #     vmin=-1,

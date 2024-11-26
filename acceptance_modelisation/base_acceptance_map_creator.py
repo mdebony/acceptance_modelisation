@@ -156,7 +156,9 @@ class BaseAcceptanceMapCreator(ABC):
 
     @staticmethod
     def _transform_obs_to_camera_frame(
-        obs: Observation, rotate_to_obs: Optional[Observation] = None
+        obs: Observation,
+        rotate_to_obs: Optional[Observation] = None,
+        derotate: Optional[bool] = False,
     ) -> Observation:
         """
         Transform events and pointing of an obs from a sky frame to camera frame
@@ -177,6 +179,18 @@ class BaseAcceptanceMapCreator(ABC):
         obs_camera_frame : gammapy.data.observations.Observation
             The observation transformed for reference in camera frame
         """
+
+        def magic_theory_angle(az: Angle):
+            return az - 34.23 * u.deg
+
+        def gamma_pca_corr_magic(angle: Angle, az: Angle):
+            gamma_theory = magic_theory_angle(az)
+            if gamma_theory <= 90 * u.deg and gamma_theory > 0 * u.deg:
+                return angle
+            if gamma_theory <= 270 * u.deg and gamma_theory > 90 * u.deg:
+                return angle + 180 * u.deg
+            if gamma_theory <= 360 * u.deg and gamma_theory > 270 * u.deg:
+                return angle + 270 * u.deg
 
         # Transform to altaz frame
         altaz_frame = AltAz(obstime=obs.events.time, location=obs.meta.location)
@@ -231,6 +245,10 @@ class BaseAcceptanceMapCreator(ABC):
             )
             component0_x, component0_y = pca_obs.components_[0]
             derot_angle_obs = np.rad2deg(np.arctan(component0_y / component0_x)) * u.deg
+            # mid Az of rotate_to_obs
+            az_obs = rotate_to_obs.get_pointing_altaz(rotate_to_obs.tmid).az
+
+            derot_angle_obs = gamma_pca_corr_magic(derot_angle_obs, az_obs)
 
             #####
             frame_centers = pointing_altaz.transform_to(camera_frame)
@@ -238,17 +256,18 @@ class BaseAcceptanceMapCreator(ABC):
             sep = frame_centers.separation(events_camera_frame)
             pos_angle = frame_centers.position_angle(events_camera_frame)
 
-            # mid Az of rotate_to_obs
-            az_obs = rotate_to_obs.get_pointing_altaz(rotate_to_obs.tmid).az
-
             pca = PCA(n_components=2).fit(
                 np.stack([events_camera_frame.lon, events_camera_frame.lat]).T
             )
             component0_x, component0_y = pca.components_[0]
-            derot_angle = np.rad2deg(np.arctan(component0_y / component0_x)) * u.deg
+            derot_angle = np.rad2deg(np.arctan2(component0_y, component0_x)) * u.deg
             az = obs.get_pointing_altaz(obs.tmid).az
+            derot_angle = gamma_pca_corr_magic(derot_angle, az)
+
             theory_diff = az_obs - az
             rot_angle = derot_angle_obs - derot_angle
+            if derotate:
+                rot_angle = -derot_angle
             print(rot_angle)
             # if np.abs(theory_diff) > 90 * u.deg:
             #     rot_angle += 180 * u.deg
