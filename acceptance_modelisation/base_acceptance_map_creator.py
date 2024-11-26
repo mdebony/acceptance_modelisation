@@ -185,12 +185,14 @@ class BaseAcceptanceMapCreator(ABC):
 
         def gamma_pca_corr_magic(angle: Angle, az: Angle):
             gamma_theory = magic_theory_angle(az)
-            if gamma_theory <= 90 * u.deg and gamma_theory > 0 * u.deg:
+            print(f"Gamma PCA: {angle}@{az}")
+            print(f"Gamma theory: {gamma_theory}")
+            if gamma_theory < 90 * u.deg and gamma_theory >= 0 * u.deg:
                 return angle
-            if gamma_theory <= 270 * u.deg and gamma_theory > 90 * u.deg:
-                return angle + 180 * u.deg
-            if gamma_theory <= 360 * u.deg and gamma_theory > 270 * u.deg:
-                return angle + 270 * u.deg
+            if gamma_theory < 270 * u.deg and gamma_theory >= 90 * u.deg:
+                return angle - 180 * u.deg
+            if gamma_theory < 360 * u.deg and gamma_theory >= 270 * u.deg:
+                return angle - 270 * u.deg
 
         # Transform to altaz frame
         altaz_frame = AltAz(obstime=obs.events.time, location=obs.meta.location)
@@ -261,6 +263,8 @@ class BaseAcceptanceMapCreator(ABC):
             )
             component0_x, component0_y = pca.components_[0]
             derot_angle = np.rad2deg(np.arctan(component0_y / component0_x)) * u.deg
+
+            print(component0_x, component0_y)
             az = obs.get_pointing_altaz(obs.tmid).az
             derot_angle = gamma_pca_corr_magic(derot_angle, az)
 
