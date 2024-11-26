@@ -185,14 +185,12 @@ class BaseAcceptanceMapCreator(ABC):
 
         def gamma_pca_corr_magic(angle: Angle, az: Angle):
             gamma_theory = magic_theory_angle(az)
-            print(f"Gamma PCA: {angle}@{az}")
-            print(f"Gamma theory: {gamma_theory}")
-            if gamma_theory < 90 * u.deg and gamma_theory >= 0 * u.deg:
+            if gamma_theory <= 90 * u.deg and gamma_theory >= 0 * u.deg:
                 return angle
-            if gamma_theory < 270 * u.deg and gamma_theory >= 90 * u.deg:
-                return angle - 180 * u.deg
-            if gamma_theory < 360 * u.deg and gamma_theory >= 270 * u.deg:
-                return angle - 270 * u.deg
+            if gamma_theory <= 270 * u.deg and gamma_theory > 90 * u.deg:
+                return angle + 180 * u.deg
+            if gamma_theory <= 360 * u.deg and gamma_theory > 270 * u.deg:
+                return angle + 360 * u.deg
 
         # Transform to altaz frame
         altaz_frame = AltAz(obstime=obs.events.time, location=obs.meta.location)
@@ -216,6 +214,11 @@ class BaseAcceptanceMapCreator(ABC):
             * u.deg,
         )
         events_camera_frame = events_altaz.transform_to(camera_frame)
+        events_camera_frame = SkyCoord(
+            lon=-events_camera_frame.lon,
+            lat=events_camera_frame.lat,
+            frame=camera_frame,
+        )
 
         # Rotation to one observation
         if rotate_to_obs is not None:
@@ -242,6 +245,12 @@ class BaseAcceptanceMapCreator(ABC):
                 * u.deg,
             )
             events_camera_frame_obs = events_altaz_obs.transform_to(camera_frame_obs)
+            events_camera_frame_obs = SkyCoord(
+                lon=-events_camera_frame_obs.lon,
+                lat=events_camera_frame_obs.lat,
+                frame=camera_frame_obs,
+            )
+
             pca_obs = PCA(n_components=2).fit(
                 np.stack([events_camera_frame_obs.lon, events_camera_frame_obs.lat]).T
             )
@@ -264,7 +273,6 @@ class BaseAcceptanceMapCreator(ABC):
             component0_x, component0_y = pca.components_[0]
             derot_angle = np.rad2deg(np.arctan(component0_y / component0_x)) * u.deg
 
-            print(component0_x, component0_y)
             az = obs.get_pointing_altaz(obs.tmid).az
             derot_angle = gamma_pca_corr_magic(derot_angle, az)
 
@@ -272,9 +280,6 @@ class BaseAcceptanceMapCreator(ABC):
             rot_angle = derot_angle_obs - derot_angle
             if derotate:
                 rot_angle = -derot_angle
-            print(
-                f"derot_angle_obs, derot_angle {derot_angle_obs.to_value(u.deg), derot_angle.to_value(u.deg)}"
-            )
             print(f"Rot_angle{rot_angle}")
             print(f"Theory angle {theory_diff.deg}")
             # if np.abs(theory_diff) > 90 * u.deg:
@@ -308,7 +313,7 @@ class BaseAcceptanceMapCreator(ABC):
         )
         obs_camera_frame._location = obs.meta.location
         if rotate_to_obs is not None:
-            return obs_camera_frame, rot_angle
+            return obs_camera_frame, rot_angle  # , component0_x, component0_y
 
         return obs_camera_frame, None
 
@@ -369,10 +374,10 @@ class BaseAcceptanceMapCreator(ABC):
                         center_coordinate_camera_frame
                     )
                     center_coordinate_camera_frame = frame_center.directional_offset_by(
-                        position_angle=pos_angle - pca_angle, separation=sep
+                        position_angle=pos_angle + pca_angle, separation=sep
                     )
                 center_coordinate_camera_frame_arb = SkyCoord(
-                    ra=center_coordinate_camera_frame.lon[0],
+                    ra=-center_coordinate_camera_frame.lon[0],
                     dec=center_coordinate_camera_frame.lat[0],
                 )
                 exclude_region_camera_frame.append(
