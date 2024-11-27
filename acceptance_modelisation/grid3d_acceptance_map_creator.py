@@ -304,7 +304,8 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
             / self.energy_axis.bin_width[:, np.newaxis, np.newaxis]
             / livetime
         )
-        # data_background = np.swapaxes(data_background, 1, 2)
+        # data_background = np.swapaxes(np.flip(data_background, 1), 1, 2)
+        data_background = np.swapaxes(np.flip(data_background, 2), 1, 2)
 
         acceptance_map = Background3D(
             axes=[self.energy_axis, extended_offset_axis_x, extended_offset_axis_y],
