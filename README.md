@@ -1,14 +1,14 @@
 # Description
 
 This package create acceptance model to be used for IACT analysis with gammapy
-acceptance_modelisation is licensed under the GNU Lesser General Public License (LGPL) v3.0.
+BAccMod is licensed under the GNU Lesser General Public License (LGPL) v3.0.
 
 # Installation
 
 
 ```bash
-git clone https://github.com/mdebony/acceptance_modelisation.git
-cd acceptance_modelisation
+git clone https://github.com/mdebony/BAccMod.git
+cd BAccMod
 python setup.py install
 ```
 
@@ -32,7 +32,7 @@ from regions import CircleSkyRegion
 import astropy.units as u
 import numpy as np
 from astropy.coordinates import SkyCoord
-from acceptance_modelisation import RadialAcceptanceMapCreator
+from baccmod import RadialAcceptanceMapCreator
 
 # The observations to use for creating the acceptance model
 data_store = DataStore.from_dir("$GAMMAPY_DATA/hess-dl3-dr1")
@@ -49,9 +49,9 @@ offset_axis_acceptance = MapAxis.from_bounds(0. * u.deg, size_fov, nbin=6, name=
 energy_axis_acceptance = MapAxis.from_energy_bounds(e_min, e_max, nbin=6, name='energy')
 
 acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
-                                                          offset_axis_acceptance,
-                                                          exclude_regions=exclude_regions,
-                                                          oversample_map=10)
+                                                      offset_axis_acceptance,
+                                                      exclude_regions=exclude_regions,
+                                                      oversample_map=10)
 acceptance_model = acceptance_model_creator.create_acceptance_map(obs_collection)
 
 ```
@@ -250,7 +250,7 @@ There are two model currently available :
 
 - A 2D model with hypothesis of a radial symmetry of the background across the FoV. This is the class `RadialAcceptanceMapCreator`.
     ````python
-    from acceptance_modelisation import RadialAcceptanceMapCreator
+    from baccmod import RadialAcceptanceMapCreator
     acceptance_model_creator = RadialAcceptanceMapCreator(energy_axis_acceptance,
                                                           offset_axis_acceptance,
                                                           exclude_regions=exclude_regions)
@@ -258,7 +258,7 @@ There are two model currently available :
     ````
 - A 3D model with a regular grid describing the FoV. This is the class `Grid3DAcceptanceMapCreator`.
     ````python
-    from acceptance_modelisation import Grid3DAcceptanceMapCreator
+    from baccmod import Grid3DAcceptanceMapCreator
     acceptance_model_creator = Grid3DAcceptanceMapCreator(energy_axis_acceptance,
                                                           offset_axis_acceptance,
                                                           exclude_regions=exclude_regions)
