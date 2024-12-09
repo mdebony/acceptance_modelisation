@@ -28,9 +28,9 @@ jobs:
 
       - name: Build release distributions
         run: |
-          # NOTE: put your own distribution build steps here.
           python -m pip install build
           python -m build
+          for file in `ls dist/baccmod*`; do new_file=${file/baccmod/BAccMod}; echo $file $new_file; mv ${file} ${new_file}; done;
 
       - name: Upload distributions
         uses: actions/upload-artifact@v4
