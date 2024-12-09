@@ -1,5 +1,6 @@
 build
 dist
+baccmod.egg-info
 __pycache__
 .idea
 .ipynb_checkpoints
