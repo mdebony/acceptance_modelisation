@@ -6,11 +6,10 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: Create and upload Python Package
+name: Test creation and upload of packages
 
 on:
-  release:
-    types: [published]
+  push: null
 
 permissions:
   contents: read
@@ -49,8 +48,8 @@ jobs:
     # Dedicated environments with protections for publishing are strongly recommended.
     # For more information, see: https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment#deployment-protection-rules
     environment:
-      name: pypi
-      url: https://pypi.org/p/BAccMod
+      name: pypi_test
+      url: https://test.pypi.org/p/BAccMod
 
     steps:
       - name: Retrieve release distributions
