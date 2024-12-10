@@ -7,10 +7,12 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='baccmod',
+    name='BAccMod',
     packages=find_packages(),
     version='0.2.0',
+    license='LGPL v3',
     description='Calculate 2D and 3d acceptance model for creating maps with gammapy (IACT analysis)',
+    url='https://github.com/mdebony/BAccMod',
     long_description=long_description,
     long_description_content_type='text/markdown',
     install_requires=[
@@ -21,5 +23,5 @@ setup(
         'regions>=0.7,<0.8'
     ],
     author='Mathieu de Bony de Lavergne, Gabriel Emery, Marie-Sophie Carrasco',
-    author_email='mathieu.debony@cea.fr'
+    author_email='debony@cppm.in2p3.fr'
 )
