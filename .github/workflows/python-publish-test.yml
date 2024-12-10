@@ -49,11 +49,10 @@ jobs:
       url: https://test.pypi.org/p/BAccMod
 
     steps:
-      - name: Install twine
-        run: python -m pip install --upgrade twine
-
-      - name: Publish
+      - name: Install twine and publish on testpypi
         with:
           TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_KEY }}
-        run: python3 -m twine upload --repository testpypi dist/*
+          TWINE_PASSWORD: ${{secrets.PYPI_KEY}}
+        run: |
+          python -m pip install --upgrade twine
+          python3 -m twine upload --repository testpypi dist/*
