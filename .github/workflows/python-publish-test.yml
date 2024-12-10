@@ -51,6 +51,12 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Retrieve release distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dists
+          path: dist/
+
       - name: Install twine and publish on testpypi
         env:
           TWINE_USERNAME: __token__
