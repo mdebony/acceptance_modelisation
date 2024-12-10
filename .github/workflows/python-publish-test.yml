@@ -39,14 +39,9 @@ jobs:
 
   testpypi-publish:
     runs-on: ubuntu-latest
-    needs:
-      - test-build
-    permissions:
-      id-token: write
 
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/BAccMod
 
     steps:
       - uses: actions/checkout@v4
