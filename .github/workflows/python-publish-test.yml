@@ -49,6 +49,12 @@ jobs:
       url: https://test.pypi.org/p/BAccMod
 
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
       - name: Install twine and publish on testpypi
         with:
           TWINE_USERNAME: __token__
