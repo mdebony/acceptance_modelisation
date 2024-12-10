@@ -9,7 +9,8 @@
 name: Test creation and upload of packages
 
 on:
-  push: null
+  release:
+    types: [deleted]
 
 permissions:
   contents: read
