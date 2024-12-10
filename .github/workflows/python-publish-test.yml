@@ -39,7 +39,8 @@ jobs:
 
   testpypi-publish:
     runs-on: ubuntu-latest
-
+    needs:
+      - test-build
     environment:
       name: testpypi
 
