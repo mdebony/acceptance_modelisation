@@ -7,17 +7,16 @@ BAccMod is licensed under the GNU Lesser General Public License (LGPL) v3.0.
 
 
 ```bash
-git clone https://github.com/mdebony/BAccMod.git
-cd BAccMod
-python setup.py install
+pip install BAccMod
 ```
 
 Dependencies :
 - numpy
 - scipy
 - astropy
-- gammapy 1.1
-- regions 0.7
+- iminuit >= 2.0
+- gammapy >= 1.1
+- regions >= 0.7
 
 # Example of use
 
