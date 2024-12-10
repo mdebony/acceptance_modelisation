@@ -1,3 +1,13 @@
+# -*- coding: utf-8 -*-
+# -------------------------------------------------------------------
+# Filename: base_acceptance_map_creator.py
+# Purpose: Base class for common functionalities in background model creation
+#
+# This program is free software: you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+# ---------------------------------------------------------------------
+
+
 import copy
 import logging
 from abc import ABC, abstractmethod
@@ -10,17 +20,21 @@ from astropy.coordinates.erfa_astrom import erfa_astrom, ErfaAstromInterpolator
 from astropy.time import Time
 from gammapy.data import Observations, Observation
 from gammapy.datasets import MapDataset
-from gammapy.irf import Background2D, Background3D
+from gammapy.irf import FoVAlignment, Background2D, Background3D
 from gammapy.irf.background import BackgroundIRF
 from gammapy.makers import MapDatasetMaker, SafeMaskMaker, FoVBackgroundMaker
-from gammapy.maps import WcsNDMap, WcsGeom, Map, MapAxis, RegionGeom
-from regions import CircleSkyRegion, SkyRegion
+from gammapy.maps import WcsNDMap, WcsGeom, Map, MapAxis
+from regions import CircleSkyRegion, EllipseSkyRegion, SkyRegion
 from scipy.integrate import cumulative_trapezoid
 from scipy.interpolate import interp1d
 
 from .bkg_collection import BackgroundCollectionZenith
 from .exception import BackgroundModelFormatException
-from .toolbox import compute_rotation_speed_fov, get_unique_wobble_pointings
+from .toolbox import (compute_rotation_speed_fov,
+                      get_unique_wobble_pointings,
+                      get_time_mini_irf,
+                      generate_irf_from_mini_irf,
+                      compute_neighbour_condition_validation)
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +52,13 @@ class BaseAcceptanceMapCreator(ABC):
                  max_angular_separation_wobble: u.Quantity = 0.4 * u.deg,
                  zenith_binning_run_splitting: bool = False,
                  max_fraction_pixel_rotation_fov: float = 0.5,
-                 time_resolution: u.Quantity = 0.1 * u.s) -> None:
+                 time_resolution: u.Quantity = 0.1 * u.s,
+                 use_mini_irf_computation: bool = False,
+                 mini_irf_time_resolution: u.Quantity = 1. * u.min,
+                 interpolation_type: str = 'linear',
+                 activate_interpolation_cleaning: bool = False,
+                 interpolation_cleaning_energy_relative_threshold: float = 1e-4,
+                 interpolation_cleaning_spatial_relative_threshold: float = 1e-2) -> None:
         """
         Create the class for calculating radial acceptance model.
 
@@ -67,6 +87,20 @@ class BaseAcceptanceMapCreator(ABC):
             For camera frame transformation the maximum size relative to a pixel a rotation is allowed
         time_resolution : astropy.units.Quantity, optional
             Time resolution to use for the computation of the rotation of the FoV and cut as function of the zenith bins
+        use_mini_irf_computation : bool, optional
+            If true, in case the case of zenith interpolation or binning, each run will be divided in small subrun (the slicing is based on time).
+            A model will be computed for each sub run before averaging them to obtain the final model for the run.
+            Should improve the accuracy of the model, especially at high zenith angle.
+        mini_irf_time_resolution : astropy.units.Quantity, optional
+            Time resolution to use for mini irf used for computation of the final background model
+        interpolation_type: str, optional
+            Select the type of interpolation to be used, could be either "log" or "linear", log tend to provided better results be could more easily create artefact that will cause issue
+        activate_interpolation_cleaning: bool, optional
+            If true, will activate the cleaning step after interpolation, it should help to eliminate artefact caused by interpolation
+        interpolation_cleaning_energy_relative_threshold: float, optional
+            To be considered value, the bin in energy need at least one adjacent bin with a relative difference within this range
+        interpolation_cleaning_spatial_relative_threshold: float, optional
+            To be considered value, the bin in space need at least one adjacent bin with a relative difference within this range
         """
 
         # If no exclusion region, default it as an empty list
@@ -77,10 +111,6 @@ class BaseAcceptanceMapCreator(ABC):
         self.energy_axis = energy_axis
         self.max_offset = max_offset
         self.exclude_regions = exclude_regions
-        self.cos_zenith_binning_method = cos_zenith_binning_method
-        self.cos_zenith_binning_parameter_value = cos_zenith_binning_parameter_value
-        self.initial_cos_zenith_binning = initial_cos_zenith_binning
-        self.max_angular_separation_wobble = max_angular_separation_wobble
 
         # Calculate map parameter
         self.n_bins_map = 2 * int(np.rint((self.max_offset / spatial_resolution).to(u.dimensionless_unscaled)))
@@ -96,6 +126,57 @@ class BaseAcceptanceMapCreator(ABC):
         self.max_fraction_pixel_rotation_fov = max_fraction_pixel_rotation_fov
         self.time_resolution = time_resolution
         self.zenith_binning_run_splitting = zenith_binning_run_splitting
+
+        # Store zenith binning parameters
+        self.cos_zenith_binning_method = cos_zenith_binning_method
+        self.cos_zenith_binning_parameter_value = cos_zenith_binning_parameter_value
+        self.initial_cos_zenith_binning = initial_cos_zenith_binning
+        self.max_angular_separation_wobble = max_angular_separation_wobble
+
+        # Store interpolation parameters
+        self.threshold_value_log_interpolation = np.finfo(np.float64).tiny
+        self.interpolation_type = interpolation_type
+
+        # Store cleaning parameters for models created from interpolation
+        self.activate_interpolation_cleaning = activate_interpolation_cleaning
+        self.interpolation_cleaning_energy_relative_threshold = interpolation_cleaning_energy_relative_threshold
+        self.interpolation_cleaning_spatial_relative_threshold = interpolation_cleaning_spatial_relative_threshold
+        self.max_cleaning_iteration = 50
+
+        # Store mini irf computation parameters
+        self.use_mini_irf_computation = use_mini_irf_computation
+        self.mini_irf_time_resolution = mini_irf_time_resolution
+
+    @staticmethod
+    def _get_events_in_camera_frame(obs: Observation) -> SkyCoord:
+        """
+        Transform events and pointing of an obs from a sky frame to camera frame
+
+        Parameters
+        ----------
+        obs : gammapy.data.observations.Observation
+           The observation to transform
+
+        Returns
+        -------
+        events_camera_frame : astropy.coordinates.SkyCoord
+           The events coordinates for reference in camera frame
+        """
+
+        # Transform to altaz frame
+        altaz_frame = AltAz(obstime=obs.events.time,
+                            location=obs.observatory_earth_location)
+        events_altaz = obs.events.radec.transform_to(altaz_frame)
+        pointing_altaz = obs.get_pointing_icrs(obs.events.time).transform_to(altaz_frame)
+
+        # Rotation to transform to camera frame
+        camera_frame = SkyOffsetFrame(origin=AltAz(alt=pointing_altaz.alt,
+                                                   az=pointing_altaz.az,
+                                                   obstime=obs.events.time,
+                                                   location=obs.observatory_earth_location),
+                                      rotation=[0., ] * len(obs.events.time) * u.deg)
+
+        return events_altaz.transform_to(camera_frame)
 
     @staticmethod
     def _transform_obs_to_camera_frame(obs: Observation) -> Observation:
@@ -171,10 +252,25 @@ class BaseAcceptanceMapCreator(ABC):
                 center_coordinate = region.center
                 center_coordinate_altaz = center_coordinate.transform_to(pointing_altaz)
                 center_coordinate_camera_frame = center_coordinate_altaz.transform_to(camera_frame)
-                center_coordinate_camera_frame_arb = SkyCoord(ra=center_coordinate_camera_frame.lon[0],
-                                                              dec=center_coordinate_camera_frame.lat[0])
+                center_coordinate_camera_frame_arb = SkyCoord(ra=-center_coordinate_camera_frame.lat[0],
+                                                              dec=-center_coordinate_camera_frame.lon[0])
                 exclude_region_camera_frame.append(CircleSkyRegion(center=center_coordinate_camera_frame_arb,
                                                                    radius=region.radius))
+            elif isinstance(region, EllipseSkyRegion):
+                center_coordinate = region.center
+                center_coordinate_altaz = center_coordinate.transform_to(pointing_altaz)
+                center_coordinate_camera_frame = center_coordinate_altaz.transform_to(camera_frame)
+                width_coordinate = center_coordinate.directional_offset_by(region.angle, region.width)
+                width_coordinate_altaz = width_coordinate.transform_to(pointing_altaz)
+                width_coordinate_camera_frame = width_coordinate_altaz.transform_to(camera_frame)
+                center_coordinate_camera_frame_arb = SkyCoord(ra=-center_coordinate_camera_frame.lat[0],
+                                                              dec=-center_coordinate_camera_frame.lon[0])
+                width_coordinate_camera_frame_arb = SkyCoord(ra=-width_coordinate_camera_frame.lat,
+                                                              dec=-width_coordinate_camera_frame.lon)
+                angle_camera_frame_arb = center_coordinate_camera_frame_arb.position_angle(width_coordinate_camera_frame_arb).to(u.deg)[0]
+                exclude_region_camera_frame.append(EllipseSkyRegion(center=center_coordinate_camera_frame_arb,
+                                                                    width=region.width, height=region.height,
+                                                                    angle=angle_camera_frame_arb))
             else:
                 raise Exception(f'{type(region)} region type not supported')
 
@@ -285,80 +381,6 @@ class BaseAcceptanceMapCreator(ABC):
 
         return time_interval
 
-    def _create_base_computation_map(self, observations: Observations) -> Tuple[WcsNDMap, WcsNDMap, WcsNDMap, u.Unit]:
-        """
-        From a list of observations return a stacked finely binned counts and exposure map in camera frame to compute a model
-
-        Parameters
-        ----------
-        observations : gammapy.data.observations.Observations
-            The list of observations
-
-        Returns
-        -------
-        count_map_background : gammapy.map.WcsNDMap
-            The count map
-        exp_map_background : gammapy.map.WcsNDMap
-            The exposure map corrected for exclusion regions
-        exp_map_background_total : gammapy.map.WcsNDMap
-            The exposure map without correction for exclusion regions
-        livetime : astropy.unit.Unit
-            The total exposure time for the model
-        """
-        count_map_background = WcsNDMap(geom=self.geom)
-        exp_map_background = WcsNDMap(geom=self.geom, unit=u.s)
-        exp_map_background_total = WcsNDMap(geom=self.geom, unit=u.s)
-        livetime = 0. * u.s
-
-        with erfa_astrom.set(ErfaAstromInterpolator(1000 * u.s)):
-            for obs in observations:
-                # Filter events in exclusion regions
-                geom = RegionGeom.from_regions(self.exclude_regions)
-                mask = geom.contains(obs.events.radec)
-                obs._events = obs.events.select_row_subset(~mask)
-                # Create a count map in camera frame
-                camera_frame_obs = self._transform_obs_to_camera_frame(obs)
-                count_map_obs, _ = self._create_map(camera_frame_obs, self.geom, [], add_bkg=False)
-                # Create exposure maps and fill them with the obs livetime
-                exp_map_obs = MapDataset.create(geom=count_map_obs.geoms['geom'])
-                exp_map_obs_total = MapDataset.create(geom=count_map_obs.geoms['geom'])
-                exp_map_obs.counts.data = camera_frame_obs.observation_live_time_duration.value
-                exp_map_obs_total.counts.data = camera_frame_obs.observation_live_time_duration.value
-
-                # Evaluate the average exclusion mask in camera frame
-                # by evaluating it on time intervals short compared to the field of view rotation
-                exclusion_mask = np.zeros(count_map_obs.counts.data.shape[1:])
-                time_interval = self._compute_time_intervals_based_on_fov_rotation(obs)
-                for i in range(len(time_interval) - 1):
-                    # Compute the exclusion region in camera frame for the average time
-                    dtime = time_interval[i + 1] - time_interval[i]
-                    time = time_interval[i] + dtime / 2
-                    average_alt_az_frame = AltAz(obstime=time,
-                                                 location=obs.observatory_earth_location)
-                    average_alt_az_pointing = obs.get_pointing_icrs(time).transform_to(average_alt_az_frame)
-                    exclusion_region_camera_frame = self._transform_exclusion_region_to_camera_frame(
-                        average_alt_az_pointing)
-                    geom_image = self.geom.to_image()
-
-                    exclusion_mask_t = ~geom_image.region_mask(exclusion_region_camera_frame) if len(
-                        exclusion_region_camera_frame) > 0 else ~Map.from_geom(geom_image)
-                    # Add the exclusion mask in camera frame weighted by the time interval duration
-                    exclusion_mask += exclusion_mask_t * (dtime).value
-                # Normalise the exclusion mask by the full observation duration
-                exclusion_mask *= 1 / (time_interval[-1] - time_interval[0]).value
-
-                # Correct the exposure map by the exclusion region
-                for j in range(count_map_obs.counts.data.shape[0]):
-                    exp_map_obs.counts.data[j, :, :] = exp_map_obs.counts.data[j, :, :] * exclusion_mask
-
-                # Stack counts and exposure maps and livetime of all observations
-                count_map_background.data += count_map_obs.counts.data
-                exp_map_background.data += exp_map_obs.counts.data
-                exp_map_background_total.data += exp_map_obs_total.counts.data
-                livetime += camera_frame_obs.observation_live_time_duration
-
-        return count_map_background, exp_map_background, exp_map_background_total, livetime
-
     @abstractmethod
     def create_acceptance_map(self, observations: Observations) -> BackgroundIRF:
         """
@@ -375,6 +397,30 @@ class BaseAcceptanceMapCreator(ABC):
         -------
         acceptance_map : gammapy.irf.background.Background2D or gammapy.irf.background.Background3D
             The acceptance map calculated using the specific algorithm implemented by the subclass.
+        """
+        pass
+
+    def _create_base_computation_map(self, observations: Observation) -> Tuple:
+        """
+        Abstract method to calculate maps used in acceptance computation from a list of observations.
+
+        Subclasses must implement this method to provide the data used for calculating the acceptance map.
+
+        Parameters
+        ----------
+        observations : gammapy.data.observations.Observations
+            The collection of observations used to create the acceptance map.
+
+        Returns
+        -------
+        count_map_background : gammapy.map.WcsNDMap
+            The count map
+        exp_map_background : gammapy.map.WcsNDMap
+            The exposure map corrected for exclusion regions
+        exp_map_background_total : gammapy.map.WcsNDMap
+            The exposure map without correction for exclusion regions
+        livetime : astropy.unit.Quantity
+            The total exposure time for the model
         """
         pass
 
@@ -418,7 +464,9 @@ class BaseAcceptanceMapCreator(ABC):
 
             if norm_background < 0.:
                 logger.error(
-                    'Invalid normalisation value for run ' + str(id_observation) + ' : ' + str(norm_background))
+                    'Invalid normalisation value for run ' + str(id_observation) + ' : ' + str(
+                        norm_background) + ', normalisation set back to 1')
+                norm_background = 1.
             elif norm_background > 1.5 or norm_background < 0.5:
                 logger.warning(
                     'High correction of the background normalisation for run ' + str(id_observation) + ' : ' + str(
@@ -454,10 +502,11 @@ class BaseAcceptanceMapCreator(ABC):
         time_axis = np.linspace(obs.tstart, obs.tstop, num=n_bin)
 
         # Compute the zenith for each evaluation time
-        altaz_coordinates = obs.get_pointing_altaz(time_axis)
-        zenith_values = altaz_coordinates.zen
-        if np.any(zenith_values < np.min(edge_zenith_bin)) or np.any(zenith_values > np.max(edge_zenith_bin)):
-            logger.error('Run with zenith value outside of the considered range for zenith binning')
+        with erfa_astrom.set(ErfaAstromInterpolator(1000 * u.s)):
+            altaz_coordinates = obs.get_pointing_altaz(time_axis)
+            zenith_values = altaz_coordinates.zen
+            if np.any(zenith_values < np.min(edge_zenith_bin)) or np.any(zenith_values > np.max(edge_zenith_bin)):
+                logger.error('Run with zenith value outside of the considered range for zenith binning')
 
         # Split the time interval to transition between zenith bin
         id_bin = np.digitize(zenith_values, edge_zenith_bin)
@@ -502,7 +551,9 @@ class BaseAcceptanceMapCreator(ABC):
         # Cut observations if requested
         if self.zenith_binning_run_splitting:
             if abs(i_method) == 2:
-                logger.warning('Using a zenith binning requirement based on n_observation while using run splitting is not recommended and could lead to poor models. We recommend switching to a binning requirement based on livetime.')
+                logger.warning('Using a zenith binning requirement based on n_observation while using run splitting '
+                               'is not recommended and could lead to poor models. We recommend switching to a binning '
+                               'requirement based on livetime.')
             compute_observations = Observations()
             for obs in observations:
                 time_interval = self._compute_time_intervals_based_on_zenith_bin(obs, zenith_bin)
@@ -512,8 +563,10 @@ class BaseAcceptanceMapCreator(ABC):
             compute_observations = observations
 
         # Determine initial bins values
-        cos_zenith_observations = np.array([np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in compute_observations])
-        livetime_observations = np.array([obs.observation_live_time_duration.to_value(u.s) for obs in compute_observations])
+        cos_zenith_observations = np.array(
+            [np.cos(obs.get_pointing_altaz(obs.tmid).zen) for obs in compute_observations])
+        livetime_observations = np.array(
+            [obs.observation_live_time_duration.to_value(u.s) for obs in compute_observations])
 
         # Select the quantity used to count observations
         if i_method in [-1, 1]:
@@ -595,7 +648,7 @@ class BaseAcceptanceMapCreator(ABC):
         logger.info(f"cos zenith bin centers: {list(np.round(bin_center, 2))}")
         logger.info(f"observation per bin: {list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin)[0])}")
         logger.info(f"livetime per bin [s]: " +
-                     f"{list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations)[0].astype(int))}")
+                    f"{list(np.histogram(cos_zenith_observations, bins=cos_zenith_bin, weights=livetime_observations)[0].astype(int))}")
         if per_wobble:
             wobble_observations_bool_arr = [(np.array(wobble_observations.tolist()) == wobble) for wobble in
                                             np.unique(np.array(wobble_observations))]
@@ -658,16 +711,155 @@ class BaseAcceptanceMapCreator(ABC):
             key_model.append(k)
         cos_zenith_model = np.array(cos_zenith_model)
 
+        # Determine model type and axes
+        type_model = type(dict_binned_model[key_model[0]])
+        axes_model = dict_binned_model[key_model[0]].axes
+
         # Find the closest model for each observation and associate it to each observation
         acceptance_map = {}
         if len(cos_zenith_model) <= 1:
             logger.warning('Only one zenith bin, zenith binning deactivated')
         for obs in observations:
-            cos_zenith_observation = np.cos(obs.get_pointing_altaz(obs.tmid).zen)
-            key_closest_model = key_model[(np.abs(cos_zenith_model - cos_zenith_observation)).argmin()]
-            acceptance_map[obs.obs_id] = dict_binned_model[key_closest_model]
+            if self.use_mini_irf_computation:
+                evaluation_time, observation_time = get_time_mini_irf(obs, self.mini_irf_time_resolution)
+
+                data_obs_all = np.zeros(
+                    tuple([len(evaluation_time), ] + list(dict_binned_model[key_model[0]].data.shape))) * \
+                               dict_binned_model[key_model[0]].unit
+                for i in range(len(evaluation_time)):
+                    cos_zenith_observation = np.cos(obs.get_pointing_altaz(evaluation_time[i]).zen)
+                    key_closest_model = key_model[(np.abs(cos_zenith_model - cos_zenith_observation)).argmin()]
+                    selected_model_bin = dict_binned_model[key_closest_model]
+                    data_obs_all[i] = selected_model_bin.data * selected_model_bin.unit
+
+                data_obs = generate_irf_from_mini_irf(data_obs_all, observation_time)
+
+                if type_model is Background2D:
+                    acceptance_map[obs.obs_id] = Background2D(axes=axes_model,
+                                                              data=data_obs)
+                elif type_model is Background3D:
+                    acceptance_map[obs.obs_id] = Background3D(axes=axes_model,
+                                                              data=data_obs,
+                                                              fov_alignment=FoVAlignment.ALTAZ)
+                else:
+                    raise Exception('Unknown background format')
+
+            else:
+                cos_zenith_observation = np.cos(obs.get_pointing_altaz(obs.tmid).zen)
+                key_closest_model = key_model[(np.abs(cos_zenith_model - cos_zenith_observation)).argmin()]
+                acceptance_map[obs.obs_id] = dict_binned_model[key_closest_model]
 
         return acceptance_map
+
+    def _create_interpolation_function(self, base_model: BackgroundCollectionZenith) -> interp1d:
+        """
+            Create the function that will perform the interpolation
+
+            Parameters
+            ----------
+            base_model : dict of gammapy.irf.background.BackgroundIRF
+                The binned base model
+                Each key of the dictionary should correspond to the zenith in degree of the model
+
+            Returns
+            -------
+            interp_func : scipy.interpolate.interp1d
+                The object that could be call directly for performing the interpolation
+        """
+
+        # Reshape the base model
+        binned_model = []
+        cos_zenith_model = []
+        for k in np.sort(list(base_model.keys())):
+            binned_model.append(base_model[k])
+            cos_zenith_model.append(np.cos(np.deg2rad(k)))
+        cos_zenith_model = np.array(cos_zenith_model)
+
+        data_cube = np.zeros(tuple([len(binned_model), ] + list(binned_model[0].data.shape))) * binned_model[0].unit
+        for i in range(len(binned_model)):
+            data_cube[i] = binned_model[i].data * binned_model[i].unit
+        if self.interpolation_type == 'log':
+            interp_func = interp1d(x=cos_zenith_model,
+                                   y=np.log10(data_cube.to_value(
+                                       binned_model[0].unit) + self.threshold_value_log_interpolation),
+                                   axis=0,
+                                   fill_value='extrapolate')
+        elif self.interpolation_type == 'linear':
+            interp_func = interp1d(x=cos_zenith_model,
+                                   y=data_cube.to_value(binned_model[0].unit),
+                                   axis=0,
+                                   fill_value='extrapolate')
+        else:
+            raise Exception("Unknown interpolation type")
+
+        return interp_func
+
+    def _background_cleaning(self, background_model):
+        """
+            Is cleaning the background model from suspicious values not compatible with neighbour pixels.
+
+            Parameters
+            ----------
+            background_model : numpy.array
+                The background model to be cleaned
+
+            Returns
+            -------
+            background_model : numpy.array
+                The background model cleaned
+        """
+
+        base_model = background_model.copy()
+        final_model = background_model.copy()
+        i = 0
+        while (i < 1 or not np.allclose(base_model, final_model)) and (i < self.max_cleaning_iteration):
+            base_model = final_model.copy()
+            i += 1
+
+            count_valid_neighbour_condition_energy = compute_neighbour_condition_validation(base_model, axis=0,
+                                                                                            relative_threshold=self.interpolation_cleaning_energy_relative_threshold)
+            count_valid_neighbour_condition_spatial = compute_neighbour_condition_validation(base_model, axis=1,
+                                                                                             relative_threshold=self.interpolation_cleaning_spatial_relative_threshold)
+            if base_model.ndim == 3:
+                count_valid_neighbour_condition_spatial += compute_neighbour_condition_validation(base_model, axis=2,
+                                                                                                  relative_threshold=self.interpolation_cleaning_spatial_relative_threshold)
+
+            mask_energy = count_valid_neighbour_condition_energy > 0
+            mask_spatial = count_valid_neighbour_condition_spatial > (1 if base_model.ndim == 3 else 0)
+            mask_valid = np.logical_and(mask_energy, mask_spatial)
+            final_model[~mask_valid] = 0.
+
+        return final_model
+
+    def _get_interpolated_background(self, interp_func: interp1d, zenith: u.Quantity) -> np.array:
+        """
+            Create the function that will perform the interpolation
+
+            Parameters
+            ----------
+            interp_func : scipy.interpolate.interp1d
+                The interpolation function
+            zenith : u.Quantity
+                The zenith for which the interpolated background should be created
+
+            Returns
+            -------
+            interp_bkg : numpy.array
+                The object that could be call directly for performing the interpolation
+        """
+
+        if self.interpolation_type == 'log':
+            interp_bkg = (10. ** interp_func(np.cos(zenith)))
+            interp_bkg[interp_bkg < 100 * self.threshold_value_log_interpolation] = 0.
+        elif self.interpolation_type == 'linear':
+            interp_bkg = interp_func(np.cos(zenith))
+        else:
+            raise Exception("Unknown interpolation type")
+
+        if self.activate_interpolation_cleaning:
+            interp_bkg = self._background_cleaning(interp_bkg)
+
+        return interp_bkg
 
     def create_acceptance_map_cos_zenith_interpolated(self,
                                                       observations: Observations,
@@ -706,35 +898,42 @@ class BaseAcceptanceMapCreator(ABC):
             raise BackgroundModelFormatException(error_message)
         dict_binned_model = base_model or self.create_model_cos_zenith_binned(off_observations)
 
-        binned_model = []
-        cos_zenith_model = []
-        for k in np.sort(list(dict_binned_model.keys())):
-            binned_model.append(dict_binned_model[k])
-            cos_zenith_model.append(np.cos(np.deg2rad(k)))
-        cos_zenith_model = np.array(cos_zenith_model)
-
         acceptance_map = {}
-        if len(binned_model) <= 1:
+        if len(dict_binned_model) <= 1:
             logger.warning('Only one zenith bin, zenith interpolation deactivated')
             for obs in observations:
-                acceptance_map[obs.obs_id] = binned_model[0]
+                acceptance_map[obs.obs_id] = dict_binned_model[dict_binned_model.zenith[0]]
         else:
-            data_cube = np.zeros(tuple([len(binned_model), ] + list(binned_model[0].data.shape))) * binned_model[0].unit
-            for i in range(len(binned_model)):
-                data_cube[i] = binned_model[i].data * binned_model[i].unit
-            interp_func = interp1d(x=cos_zenith_model,
-                                   y=np.log10(data_cube.value + np.finfo(np.float64).tiny),
-                                   axis=0,
-                                   fill_value='extrapolate')
+            # Determine model properties
+            type_model = type(dict_binned_model[dict_binned_model.zenith[0]])
+            axes_model = dict_binned_model[dict_binned_model.zenith[0]].axes
+            shape_model = dict_binned_model[dict_binned_model.zenith[0]].data.shape
+            unit_model = dict_binned_model[dict_binned_model.zenith[0]].unit
+
+            # Perform the interpolation
+            interp_func = self._create_interpolation_function(dict_binned_model)
             for obs in observations:
-                data_obs = (10. ** interp_func(np.cos(obs.get_pointing_altaz(obs.tmid).zen)))
-                data_obs[data_obs < 100 * np.finfo(np.float64).tiny] = 0.
-                if type(binned_model[0]) is Background2D:
-                    acceptance_map[obs.obs_id] = Background2D(axes=binned_model[0].axes,
-                                                              data=data_obs * data_cube.unit)
-                elif type(binned_model[0]) is Background3D:
-                    acceptance_map[obs.obs_id] = Background3D(axes=binned_model[0].axes,
-                                                              data=data_obs * data_cube.unit)
+                if self.use_mini_irf_computation:
+                    evaluation_time, observation_time = get_time_mini_irf(obs, self.mini_irf_time_resolution)
+
+                    data_obs_all = np.zeros(tuple([len(evaluation_time), ] + list(shape_model)))
+                    for i in range(len(evaluation_time)):
+                        data_obs_bin = self._get_interpolated_background(interp_func,
+                                                                         obs.get_pointing_altaz(evaluation_time[i]).zen)
+                        data_obs_all[i, :, :] = data_obs_bin
+
+                    data_obs = generate_irf_from_mini_irf(data_obs_all, observation_time)
+
+                else:
+                    data_obs = self._get_interpolated_background(interp_func, obs.get_pointing_altaz(obs.tmid).zen)
+
+                if type_model is Background2D:
+                    acceptance_map[obs.obs_id] = Background2D(axes=axes_model,
+                                                              data=data_obs * unit_model)
+                elif type_model is Background3D:
+                    acceptance_map[obs.obs_id] = Background3D(axes=axes_model,
+                                                              data=data_obs * unit_model,
+                                                              fov_alignment=FoVAlignment.ALTAZ)
                 else:
                     raise Exception('Unknown background format')
 
