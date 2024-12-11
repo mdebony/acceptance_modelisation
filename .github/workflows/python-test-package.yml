@@ -38,7 +38,7 @@ jobs:
       - name: Install dependencies, download test data, install package and run test
         run: | 
           python -m pip install --upgrade pip setuptools wheel pytest
-          if [ ${{ matrix.gammapy-version }} = "1.1" ]; then python -m pip install astropy==4.1 numpy==1.22; else echo "No specific version of astropy and numpy required"; fi
+          if [ ${{ matrix.gammapy-version }} = "1.1" ]; then python -m pip install astropy==5.3.4 numpy==1.22; else echo "No specific version of astropy and numpy required"; fi
           python -m pip install gammapy==${{ matrix.gammapy-version }}
           git clone --depth 1 --branch v${{ matrix.gammapy-version }} https://github.com/gammapy/gammapy-data
           export GAMMAPY_DATA=$PWD/gammapy-data/
