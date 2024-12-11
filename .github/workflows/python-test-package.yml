@@ -35,11 +35,17 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies and download test data
+      - name: Install dependencies, download test data, install package and run test
         run: | 
           python -m pip install --upgrade pip setuptools wheel pytest
           python -m pip install gammapy==${{ matrix.gammapy-version }}
           git clone --depth 1 --branch v${{ matrix.gammapy-version }} https://github.com/gammapy/gammapy-data
           export GAMMAPY_DATA=$PWD/gammapy-data/
+          python -m pip install .
           python -c "import sys; print(\"Python version : \", sys.version)"
-          python -c "import gammapy; print(\"Gammapy version : \", gammapy.__version__)"
+          python -c "import gammapy; print(\"gammapy version : \", gammapy.__version__)"
+          python -c "import astropy; print(\"astropy version : \", astropy.__version__)"
+          python -c "import numpy; print(\"numpy version : \", numpy.__version__)"
+          python -c "import scipy; print(\"scipy version : \", scipy.__version__)"
+          python -c "import iminuit; print(\"iminuit version : \", iminuit.__version__)"
+          pytest
