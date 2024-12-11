@@ -16,11 +16,11 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     install_requires=[
-        'gammapy>=1.1,<1.2',
+        'gammapy>=1.1,<1.4',
         'numpy',
         'scipy',
         'astropy>=4.0',
-        'regions>=0.7,<0.8'
+        'regions>=0.7,<0.11'
     ],
     author='Mathieu de Bony de Lavergne, Gabriel Emery, Marie-Sophie Carrasco',
     author_email='debony@cppm.in2p3.fr'
