@@ -8,8 +8,7 @@
 
 name: Create and test the Python Package
 
-on:
-  push
+on: [push, pull_request]
 
 permissions:
   contents: read
