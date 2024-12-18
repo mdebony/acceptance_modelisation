@@ -1,23 +1,22 @@
 # Description
 
-This package create acceptance model to be used for IACT analysis with gammapy
+This package create background model (or acceptance model) to be used for IACT analysis with gammapy
 BAccMod is licensed under the GNU Lesser General Public License (LGPL) v3.0.
 
 # Installation
 
 
 ```bash
-git clone https://github.com/mdebony/BAccMod.git
-cd BAccMod
-python setup.py install
+pip install BAccMod
 ```
 
 Dependencies :
 - numpy
 - scipy
 - astropy
-- gammapy 1.1
-- regions 0.7
+- iminuit >= 2.0
+- gammapy >= 1.1
+- regions >= 0.7
 
 # Example of use
 
@@ -88,6 +87,10 @@ obs_collection = data_store.get_observations([23523, 23526, 23559, 23592])
 
 data_store.hdu_table
 ```
+
+> [!WARNING]  
+> Due to some change in gammapy 1.3, it's strongly suggested to use only use models that have been created with the same version of gammapy used
+
 
 ## Telescope position
 
