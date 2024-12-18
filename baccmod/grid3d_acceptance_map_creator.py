@@ -11,18 +11,17 @@
 import logging
 from typing import Tuple, List, Optional
 
-from IPython.terminal.pt_inputhooks.wx import major_version
+import astropy.units as u
+import gammapy
+import numpy as np
 from astropy.coordinates import AltAz
 from astropy.coordinates.erfa_astrom import erfa_astrom, ErfaAstromInterpolator
-import astropy.units as u
-import numpy as np
 from gammapy.data import Observations
 from gammapy.datasets import MapDataset
 from gammapy.irf import FoVAlignment, Background3D
 from gammapy.maps import WcsNDMap, Map, MapAxis, RegionGeom
 from iminuit import Minuit
 from regions import SkyRegion
-import gammapy
 
 from .base_acceptance_map_creator import BaseAcceptanceMapCreator
 from .modeling import FIT_FUNCTION, log_factorial, log_poisson
