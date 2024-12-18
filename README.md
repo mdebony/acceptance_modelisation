@@ -89,7 +89,7 @@ data_store.hdu_table
 ```
 
 > [!WARNING]  
-> Due to some change in gammapy 1.3, it's strongly suggested to use only use model that have been created with the same version of gammapy used
+> Due to some change in gammapy 1.3, it's strongly suggested to use only use models that have been created with the same version of gammapy used
 
 
 ## Telescope position
