@@ -1,6 +1,6 @@
 # Description
 
-This package create background model to be used for IACT analysis with gammapy
+This package create background model (or acceptance model) to be used for IACT analysis with gammapy
 BAccMod is licensed under the GNU Lesser General Public License (LGPL) v3.0.
 
 # Installation
