@@ -11,6 +11,7 @@
 import logging
 from typing import Tuple, List, Optional
 
+from IPython.terminal.pt_inputhooks.wx import major_version
 from astropy.coordinates import AltAz
 from astropy.coordinates.erfa_astrom import erfa_astrom, ErfaAstromInterpolator
 import astropy.units as u
@@ -21,11 +22,15 @@ from gammapy.irf import FoVAlignment, Background3D
 from gammapy.maps import WcsNDMap, Map, MapAxis, RegionGeom
 from iminuit import Minuit
 from regions import SkyRegion
+import gammapy
 
 from .base_acceptance_map_creator import BaseAcceptanceMapCreator
 from .modeling import FIT_FUNCTION, log_factorial, log_poisson
 
 logger = logging.getLogger(__name__)
+
+gammapy_major_version = gammapy.__version__.split('.')[0]
+gammapy_minor_version = gammapy.__version__.split('.')[1]
 
 
 class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
@@ -260,9 +265,14 @@ class Grid3DAcceptanceMapCreator(BaseAcceptanceMapCreator):
         data_background = corrected_counts / solid_angle[np.newaxis, :, :] / self.energy_axis.bin_width[:, np.newaxis,
                                                                              np.newaxis] / livetime
 
-        acceptance_map = Background3D(axes=[self.energy_axis, extended_offset_axis_x, extended_offset_axis_y],
-                                      data=data_background.to(u.Unit('s-1 MeV-1 sr-1')),
-                                      fov_alignment=FoVAlignment.ALTAZ)
+        if gammapy_major_version == 1 and gammapy_minor_version >= 3:
+            acceptance_map = Background3D(axes=[self.energy_axis, extended_offset_axis_x, extended_offset_axis_y],
+                                          data=np.flip(data_background.to(u.Unit('s-1 MeV-1 sr-1')), axis=1),
+                                          fov_alignment=FoVAlignment.ALTAZ)
+        else:
+            acceptance_map = Background3D(axes=[self.energy_axis, extended_offset_axis_x, extended_offset_axis_y],
+                                          data=data_background.to(u.Unit('s-1 MeV-1 sr-1')),
+                                          fov_alignment=FoVAlignment.ALTAZ)
 
         return acceptance_map
 
