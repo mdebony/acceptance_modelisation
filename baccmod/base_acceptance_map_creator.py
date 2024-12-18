@@ -245,15 +245,15 @@ class BaseAcceptanceMapCreator(ABC):
         """
 
         camera_frame = SkyOffsetFrame(origin=pointing_altaz,
-                                      rotation=[0., ] * u.deg)
+                                      rotation=[90., ] * u.deg)
         exclude_region_camera_frame = []
         for region in self.exclude_regions:
             if isinstance(region, CircleSkyRegion):
                 center_coordinate = region.center
                 center_coordinate_altaz = center_coordinate.transform_to(pointing_altaz)
                 center_coordinate_camera_frame = center_coordinate_altaz.transform_to(camera_frame)
-                center_coordinate_camera_frame_arb = SkyCoord(ra=-center_coordinate_camera_frame.lat[0],
-                                                              dec=-center_coordinate_camera_frame.lon[0])
+                center_coordinate_camera_frame_arb = SkyCoord(ra=center_coordinate_camera_frame.lon[0],
+                                                              dec=-center_coordinate_camera_frame.lat[0])
                 exclude_region_camera_frame.append(CircleSkyRegion(center=center_coordinate_camera_frame_arb,
                                                                    radius=region.radius))
             elif isinstance(region, EllipseSkyRegion):
@@ -263,10 +263,10 @@ class BaseAcceptanceMapCreator(ABC):
                 width_coordinate = center_coordinate.directional_offset_by(region.angle, region.width)
                 width_coordinate_altaz = width_coordinate.transform_to(pointing_altaz)
                 width_coordinate_camera_frame = width_coordinate_altaz.transform_to(camera_frame)
-                center_coordinate_camera_frame_arb = SkyCoord(ra=-center_coordinate_camera_frame.lat[0],
-                                                              dec=-center_coordinate_camera_frame.lon[0])
-                width_coordinate_camera_frame_arb = SkyCoord(ra=-width_coordinate_camera_frame.lat,
-                                                              dec=-width_coordinate_camera_frame.lon)
+                center_coordinate_camera_frame_arb = SkyCoord(ra=center_coordinate_camera_frame.lon[0],
+                                                              dec=-center_coordinate_camera_frame.lat[0])
+                width_coordinate_camera_frame_arb = SkyCoord(ra=width_coordinate_camera_frame.lon,
+                                                             dec=-width_coordinate_camera_frame.lat)
                 angle_camera_frame_arb = center_coordinate_camera_frame_arb.position_angle(width_coordinate_camera_frame_arb).to(u.deg)[0]
                 exclude_region_camera_frame.append(EllipseSkyRegion(center=center_coordinate_camera_frame_arb,
                                                                     width=region.width, height=region.height,
